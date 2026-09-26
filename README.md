@@ -15,8 +15,8 @@ One Night Ultimate Werewolf.
 
 ## Status
 
-Early. The plugin boundary works end to end: games load as sandboxed components and play
-through a headless hotseat harness. No TUI or networking yet. See
+Early. Games load as sandboxed components and play hotseat on one machine, in the terminal
+interface or through a headless stdin harness. No networking yet. See
 [docs/PLAN.md](docs/PLAN.md) for the architecture and build order.
 
 ## Layout
@@ -26,7 +26,7 @@ sdk/       tabletty-sdk     what a game author depends on; includes the plugin c
 host/      tabletty-host    runs one plugin safely: sandbox, fuel, memory limits, discovery
 engine/    tabletty-engine  runs one match: state, legal actions, effects, the action log
 net/       tabletty-net     peer-to-peer lobbies and game transfer (planned)
-tui/       tabletty-tui     the terminal interface (planned)
+tui/       tabletty-tui     the terminal interface: menu, board rendering, hotseat play
 cli/       tabletty         the binary; wires the pieces above into modes like `hotseat`
 games/     the games, each one a plugin built against the SDK
 ```
@@ -41,7 +41,8 @@ Requires [devenv](https://devenv.sh):
 
 ```
 devenv shell
-cargo build
+game-build rps && game-build tic-tac-toe
+cargo run
 ```
 
 ## License

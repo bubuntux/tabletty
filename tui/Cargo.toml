@@ -1,0 +1,18 @@
+[package]
+name = "tabletty-tui"
+description = "The tabletty terminal interface: draws a game's view tree and takes input"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+tabletty-engine.workspace = true
+tabletty-host.workspace = true
+tabletty-sdk.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+rps.workspace = true
+tic-tac-toe.workspace = true

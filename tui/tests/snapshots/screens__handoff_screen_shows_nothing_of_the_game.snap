@@ -1,0 +1,28 @@
+---
+source: tui/tests/screens.rs
+expression: handoff
+---
+"Rock-Paper-Scissors                                                             "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                Pass to Player 2                                "
+"                                                                                "
+"                             Press enter when ready                             "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"enter continue  q leave                                                         "

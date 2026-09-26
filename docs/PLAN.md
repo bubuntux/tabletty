@@ -196,12 +196,15 @@ fixtures: between them they cover simultaneous hidden submission, quorum advance
 redaction, turn alternation, grid layout, `selectable` items, disabled actions, and
 win/draw outcomes.
 
-### Phase 2 — The renderer
+### Phase 2 — The renderer · **done**
 
-`tabletty-tui`: the `view` tree rendered with ratatui, screens for menu and match, the
-event loop (`tokio::select!` over input / timers, network later).
+`tabletty-tui`: the `view` tree rendered with ratatui, a menu, and hotseat matches with a
+handoff screen between players so hidden information never shows to the wrong person.
+`layout` became `grid(columns)` here, since a renderer can't guess a non-square board.
 
-*Done when:* both canaries are playable on one machine with a real interface.
+The event loop is a plain blocking read for now. `tokio::select!` arrives with the first
+thing that needs it: timers (which also need the WIT to say how a firing re-enters as an
+action) or the network in Phase 5.
 
 ### Phase 3 — First real game
 

@@ -79,7 +79,12 @@ world game-plugin {
   }
 
   record zone { label: string, layout: layout, items: list<item> }
-  enum layout { row, grid, stack }
+  variant layout {
+    row,
+    /// Items fill rows of this many columns, left to right.
+    grid(u8),
+    stack,
+  }
 
   record item {
     face:       face,

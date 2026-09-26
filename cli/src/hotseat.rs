@@ -5,14 +5,13 @@
 //! Stdout is this command's whole interface, so it writes there directly.
 
 use std::io::{self, BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use anyhow::{Context, bail};
 use tabletty_engine::{Match, SubmitError};
-use tabletty_host::{Plugin, Runtime, WasmPlugin, discover};
+use tabletty_host::{Plugin, Runtime};
 use tabletty_sdk::{Effect, Face, Item, Layout, Player, PlayerId, View};
 
-use crate::paths;
+use crate::{games, paths};
 
 #[derive(clap::Args)]
 pub struct Args {
@@ -42,7 +41,7 @@ blank lines and lines starting with # are ignored";
 
 pub fn main(args: Args) -> anyhow::Result<()> {
     let runtime = Runtime::new(paths::cwasm_cache_dir())?;
-    let plugin = load_game(&runtime, &args.game, &args.games_dirs)?;
+    let plugin = games::load(&runtime, &args.game, &args.games_dirs)?;
     let players = (0..args.players)
         .map(|id| Player {
             id,
@@ -52,27 +51,6 @@ pub fn main(args: Args) -> anyhow::Result<()> {
     let seed = *blake3::hash(args.seed.as_bytes()).as_bytes();
     let mut game = Match::start(plugin, players, seed, Vec::new())?;
     run(&mut game, io::stdin().lock(), &mut io::stdout().lock())
-}
-
-fn load_game(runtime: &Runtime, game: &str, extra_dirs: &[PathBuf]) -> anyhow::Result<WasmPlugin> {
-    let path = Path::new(game);
-    if path.extension().is_some_and(|ext| ext == "wasm") {
-        return runtime
-            .load_file(path)
-            .with_context(|| format!("loading {}", path.display()));
-    }
-
-    let mut dirs = extra_dirs.to_vec();
-    dirs.push(PathBuf::from("dist/games"));
-    dirs.extend(paths::games_dir());
-    let found = discover(runtime, &dirs);
-    let ids: Vec<&str> = found.iter().map(|game| game.manifest.id.as_str()).collect();
-    let available = ids.join(", ");
-    match found.into_iter().find(|found| found.manifest.id == game) {
-        Some(found) => Ok(found.plugin),
-        None if available.is_empty() => bail!("no game {game:?}: no games found in {dirs:?}"),
-        None => bail!("no game {game:?}; available: {available}"),
-    }
 }
 
 /// Play `game` from `input` until it ends or input runs out, writing a transcript.
@@ -247,7 +225,7 @@ fn write_view(out: &mut impl Write, view: &View) -> io::Result<()> {
     for zone in &view.zones {
         writeln!(out, "  [{}]", zone.label)?;
         match zone.layout {
-            Layout::Grid => write_grid(out, &zone.items)?,
+            Layout::Grid(columns) => write_grid(out, columns, &zone.items)?,
             Layout::Row | Layout::Stack => {
                 for item in &zone.items {
                     write_item(out, item)?;
@@ -287,9 +265,9 @@ fn write_item(out: &mut impl Write, item: &Item) -> io::Result<()> {
     writeln!(out)
 }
 
-/// Lay items out in the smallest square grid that holds them all.
-fn write_grid(out: &mut impl Write, items: &[Item]) -> io::Result<()> {
-    let columns = (1..).find(|side| side * side >= items.len()).unwrap_or(1);
+/// Lay items out in rows of `columns`. A plugin asking for zero columns gets one.
+fn write_grid(out: &mut impl Write, columns: u8, items: &[Item]) -> io::Result<()> {
+    let columns = usize::from(columns.max(1));
     let width = items
         .iter()
         .map(|item| face_text(&item.face).len())

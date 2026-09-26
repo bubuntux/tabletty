@@ -16,6 +16,7 @@ pub use wasm::{Runtime, WasmPlugin};
 
 use std::io;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tabletty_sdk::{ActionSpec, Effect, InitCtx, Manifest, PlayerId, View};
 
@@ -36,6 +37,35 @@ pub trait Plugin {
     ) -> Result<Result<Transition, String>, Error>;
 
     fn view(&self, state: &[u8], viewer: Option<PlayerId>) -> Result<View, Error>;
+}
+
+/// Lets one loaded plugin back several matches, e.g. a menu that can start a game
+/// more than once.
+impl<P: Plugin + ?Sized> Plugin for Arc<P> {
+    fn manifest(&self) -> Result<Manifest, Error> {
+        (**self).manifest()
+    }
+
+    fn init(&self, ctx: &InitCtx) -> Result<Vec<u8>, Error> {
+        (**self).init(ctx)
+    }
+
+    fn actions(&self, state: &[u8], player: PlayerId) -> Result<Vec<ActionSpec>, Error> {
+        (**self).actions(state, player)
+    }
+
+    fn apply(
+        &self,
+        state: &[u8],
+        player: PlayerId,
+        action: &[u8],
+    ) -> Result<Result<Transition, String>, Error> {
+        (**self).apply(state, player, action)
+    }
+
+    fn view(&self, state: &[u8], viewer: Option<PlayerId>) -> Result<View, Error> {
+        (**self).view(state, viewer)
+    }
 }
 
 /// The result of an accepted action.

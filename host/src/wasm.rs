@@ -277,7 +277,7 @@ impl From<wit::Zone> for tabletty_sdk::Zone {
             label: zone.label,
             layout: match zone.layout {
                 wit::Layout::Row => Layout::Row,
-                wit::Layout::Grid => Layout::Grid,
+                wit::Layout::Grid(columns) => Layout::Grid(columns),
                 wit::Layout::Stack => Layout::Stack,
             },
             items: zone.items.into_iter().map(Into::into).collect(),

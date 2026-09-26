@@ -7,8 +7,8 @@ each is a sandboxed WebAssembly component loaded at runtime.
 and *why* they were made, the crate layout, the build order, and the verification strategy.
 This file is only the operational summary.
 
-Status: Phase 1 done (contract, SDK, host, engine `Match`, hotseat harness, and the
-rps / tic-tac-toe fixtures). Phase 2 is the ratatui renderer.
+Status: Phases 1–2 done (contract, SDK, host, engine `Match`, stdin hotseat harness, the
+rps / tic-tac-toe fixtures, and the ratatui TUI). Phase 3 is Liar's Dice.
 
 ## Commands
 
@@ -26,6 +26,7 @@ cargo nextest run               # needs `game-build rps` and `game-build tic-tac
 cargo clippy --all-targets
 cargo fmt
 
+cargo run                                               # the TUI: menu, then hotseat play
 cargo run -- hotseat --game rps --players 2 --seed 42   # stdin-driven; `help` lists commands
 ```
 

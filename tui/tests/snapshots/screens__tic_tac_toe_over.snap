@@ -1,0 +1,28 @@
+---
+source: tui/tests/screens.rs
+expression: over
+---
+"Tic-tac-toe — game over                                                         "
+"X: Player 1  ·  O: Player 2  ·  Winner: Player 1                                "
+"┌ Board ───────────────────────────────────┐┌ Events ──────────────────────────┐"
+"│╭a1───╮╭b1───╮╭c1───╮                     ││1. Player 1  1  three in a row    │"
+"││  X  ││  O  ││  ·  │                     ││2. Player 2  0                    │"
+"│╰─────╯╰─────╯╰─────╯                     ││                                  │"
+"│╭a2───╮╭b2───╮╭c2───╮                     ││Player 1 (X) plays a1.            │"
+"││  X  ││  O  ││  ·  │                     ││Player 2 (O) plays b1.            │"
+"│╰─────╯╰─────╯╰─────╯                     ││Player 1 (X) plays a2.            │"
+"│╭a3───╮╭b3───╮╭c3───╮                     ││Player 2 (O) plays b2.            │"
+"││  X  ││  ·  ││  ·  │                     ││Player 1 (X) plays a3.            │"
+"│╰─────╯╰─────╯╰─────╯                     ││                                  │"
+"└──────────────────────────────────────────┘│                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            │                                  │"
+"                                            └──────────────────────────────────┘"
+"enter back to menu                                                              "

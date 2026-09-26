@@ -205,7 +205,7 @@ impl Game for TicTacToe {
             status,
             zones: vec![Zone {
                 label: "Board".into(),
-                layout: Layout::Grid,
+                layout: Layout::Grid(3),
                 items: squares,
             }],
             log: Vec::new(),

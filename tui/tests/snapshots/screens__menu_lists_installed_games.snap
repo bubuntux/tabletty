@@ -1,0 +1,28 @@
+---
+source: tui/tests/screens.rs
+expression: screen(&app())
+---
+"tabletty                                                                        "
+"                                                                                "
+"┌ Games ───────────────────────────────────────────────────────────────────────┐"
+"│ Rock-Paper-Scissors  0.1.0                                                   │"
+"│ Tic-tac-toe  0.1.0                                                           │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+"Simultaneous throws, first to 2 round wins.                                     "
+"                                                                                "
+"Players: 2                                                                      "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"↑↓ game  ←→ players  enter start  q quit                                        "

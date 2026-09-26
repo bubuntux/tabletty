@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["sdk", "host", "engine", "cli", "games/*"]
+members = ["sdk", "host", "engine", "tui", "cli", "games/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +11,7 @@ license = "GPL-3.0-or-later"
 tabletty-sdk = { path = "sdk" }
 tabletty-host = { path = "host" }
 tabletty-engine = { path = "engine" }
+tabletty-tui = { path = "tui" }
 rps = { path = "games/rps" }
 tic-tac-toe = { path = "games/tic-tac-toe" }
 
@@ -22,7 +23,9 @@ wit-bindgen = "0.62"
 anyhow = "1"
 blake3 = "1"
 clap = { version = "4", features = ["derive"] }
+getrandom = "0.4"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
+ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 tracing = "0.1"
