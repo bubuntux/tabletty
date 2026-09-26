@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+
+  # Required for `languages.rust.channel` / `.targets` — the nixpkgs Rust
+  # can't add the wasm32-unknown-unknown target on its own.
+  rust-overlay:
+    url: github:oxalica/rust-overlay
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
