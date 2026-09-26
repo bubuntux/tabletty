@@ -321,7 +321,7 @@ mod tests {
 
     fn transcript(game_crate: &str, script: &str) -> String {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../dist/games")
+            .join("../dist/games")
             .join(format!("{game_crate}.wasm"));
         assert!(
             path.exists(),

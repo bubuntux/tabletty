@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "games/*"]
+members = ["sdk", "host", "engine", "cli", "games/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,9 +8,9 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
-tabletty-sdk = { path = "crates/tabletty-sdk" }
-tabletty-host = { path = "crates/tabletty-host" }
-tabletty-engine = { path = "crates/tabletty-engine" }
+tabletty-sdk = { path = "sdk" }
+tabletty-host = { path = "host" }
+tabletty-engine = { path = "engine" }
 rps = { path = "games/rps" }
 tic-tac-toe = { path = "games/tic-tac-toe" }
 

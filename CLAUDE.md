@@ -56,8 +56,10 @@ post-game audit — the failure shows up much later and far from the cause.
 
 ## Layout
 
-`crates/tabletty-{sdk,host,engine,net,tui}` plus the `tabletty` binary, and `games/*` for
-the plugins. See the Layout section of `docs/PLAN.md` for what each one owns.
+`sdk/` (with the contract in `sdk/wit/game.wit`), `host/`, `engine/`, `cli/` (the
+`tabletty` binary), later `net/` and `tui/`, and `games/*` for the plugins. Directories
+drop the `tabletty-` prefix; package names keep it. See the Layout section of
+`docs/PLAN.md` for what each one owns.
 
 ## Docs
 
@@ -67,7 +69,7 @@ rewritten by what the previous phase teaches.
 
 Two rules keep it that way:
 
-- When code replaces prose, delete the prose. `wit/game.wit` supersedes the type surface
+- When code replaces prose, delete the prose. `sdk/wit/game.wit` supersedes the type surface
   section the moment it exists; a duplicated contract drifts.
 - Write `docs/phases/N-name.md` just-in-time, at most one phase ahead, and only when a
   phase needs more detail than the plan carries.

@@ -53,7 +53,7 @@ zero-knowledge work:
 
 ## The WIT world is the contract
 
-[`wit/game.wit`](../wit/game.wit) is the source of truth for the plugin interface: five
+[`sdk/wit/game.wit`](../sdk/wit/game.wit) is the source of truth for the plugin interface: five
 exports (`manifest`, `init`, `actions`, `apply`, `view`) and the types they move.
 
 All `export`, **no `import`**. A component with zero imports cannot reach the clock,
@@ -129,22 +129,25 @@ Drop in a file, the game appears — no sidecar manifest to keep in sync with th
 devenv.nix            rust (wasm32-unknown-unknown) + wasm-tools + game-build script
 devenv.yaml           nixpkgs + rust-overlay inputs
 docs/PLAN.md          this file
-wit/game.wit          the contract
-crates/
-  tabletty-sdk/       plugin-side: wit-bindgen glue, postcard, seeded-RNG helper,
-                      derive macros + a Game trait so authors write idiomatic Rust
-  tabletty-host/      wasmtime Engine/Linker, fuel + limits, .cwasm cache, discovery
-  tabletty-engine/    match runtime: lobby→match, commit-reveal seed, effect processing,
-                      timers, per-player view projection, audit log
-  tabletty-net/       iroh endpoint, tickets, framing, iroh-blobs transfer, seats
-  tabletty-tui/       ratatui View renderer + screens
-  tabletty/           bin: clap, hotseat, replay, --spectate
+sdk/                  tabletty-sdk, plugin-side: wit-bindgen glue, postcard, seeded-RNG
+                      helper, a Game trait so authors write idiomatic Rust
+  wit/game.wit        the contract — inside the SDK so it ships with the crate
+host/                 tabletty-host: wasmtime Engine/Linker, fuel + limits, .cwasm cache,
+                      discovery
+engine/               tabletty-engine: match runtime — lobby→match, commit-reveal seed,
+                      effect processing, timers, per-player view projection, audit log
+net/                  tabletty-net: iroh endpoint, tickets, framing, iroh-blobs, seats
+tui/                  tabletty-tui: ratatui View renderer + screens
+cli/                  tabletty, the binary: clap, hotseat, replay, --spectate
 games/
   rps/                canaries — trivial, permanent conformance fixtures
   tic-tac-toe/
   liars-dice/         each builds as a component AND a native lib (see Verification)
   .../               further games are just more directories here
 ```
+
+Directories drop the `tabletty-` prefix; package names keep it. Everything under `sdk/` is
+MIT OR Apache-2.0 so plugin authors can license games freely; the rest is GPL-3.0-or-later.
 
 A single Cargo workspace: shared `[workspace.dependencies]`, members referring to each other
 by path and taking deps with `foo.workspace = true`, so versions are pinned in one place.
@@ -184,7 +187,7 @@ same ground. Every phase ends in something you can actually run.
 
 ### Phase 1 — The contract and the boundary · **done**
 
-`wit/game.wit`, `tabletty-sdk` (a `Game` trait plus `export_game!`), `tabletty-host`
+`sdk/wit/game.wit`, `tabletty-sdk` (a `Game` trait plus `export_game!`), `tabletty-host`
 (wasmtime, fuel, limits, `.cwasm` cache, discovery, and a `NativePlugin` for tests),
 a minimal `tabletty-engine` `Match`, and `tabletty hotseat` — headless, stdin-driven.
 
@@ -219,7 +222,7 @@ The purpose is type stability: `view`, `effect` and `action-spec` are the wire f
 they should stop changing before a protocol is built on them. Two real games plus two
 canaries is enough signal that they've settled.
 
-*Done when:* nothing in `wit/game.wit` has changed to accommodate this game that wasn't
+*Done when:* nothing in `sdk/wit/game.wit` has changed to accommodate this game that wasn't
 already there for the last one.
 
 ### Phase 5 — Networking

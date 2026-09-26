@@ -19,6 +19,22 @@ Early. The plugin boundary works end to end: games load as sandboxed components 
 through a headless hotseat harness. No TUI or networking yet. See
 [docs/PLAN.md](docs/PLAN.md) for the architecture and build order.
 
+## Layout
+
+```
+sdk/       tabletty-sdk     what a game author depends on; includes the plugin contract (wit/)
+host/      tabletty-host    runs one plugin safely: sandbox, fuel, memory limits, discovery
+engine/    tabletty-engine  runs one match: state, legal actions, effects, the action log
+net/       tabletty-net     peer-to-peer lobbies and game transfer (planned)
+tui/       tabletty-tui     the terminal interface (planned)
+cli/       tabletty         the binary; wires the pieces above into modes like `hotseat`
+games/     the games, each one a plugin built against the SDK
+```
+
+Dependencies only point one way: games need nothing but the SDK, and nothing depends on
+the binary. The `host` knows how to run a plugin, the `engine` knows how a match works,
+and the `cli` decides which pieces to combine.
+
 ## Building
 
 Requires [devenv](https://devenv.sh):
@@ -32,7 +48,7 @@ cargo build
 
 tabletty is licensed under the [GNU General Public License v3.0 or later](LICENSE).
 
-The plugin contract ([`wit/game.wit`](wit/game.wit)) and the SDK
-([`crates/tabletty-sdk`](crates/tabletty-sdk)) are instead dual-licensed under
+The SDK ([`sdk/`](sdk)), including the plugin contract in
+[`sdk/wit/game.wit`](sdk/wit/game.wit), is instead dual-licensed under
 [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. The SDK is compiled
 into every game plugin, so you can license your own games however you like.

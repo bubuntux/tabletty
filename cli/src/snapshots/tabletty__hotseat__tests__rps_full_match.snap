@@ -1,5 +1,5 @@
 ---
-source: crates/tabletty/src/hotseat.rs
+source: cli/src/hotseat.rs
 expression: "transcript(\"rps\",\n\"\\\n# round 1: a draw\n0 rock\nview 1\n1 rock\n# round 2: P0 has already thrown, so their second throw is refused\n0 paper\n0 scissors\nview 0\n1 scissors\n# round 3\nactions 1\n1 paper\n0 scissors\n# round 4 decides it\n0 rock\n1 scissors\n\",)"
 ---
 Rock-Paper-Scissors 0.1.0 — hotseat

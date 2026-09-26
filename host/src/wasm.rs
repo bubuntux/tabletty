@@ -10,7 +10,7 @@ use crate::{Error, Plugin, Transition, cache};
 
 mod bindings {
     wasmtime::component::bindgen!({
-        path: "../../wit",
+        path: "../sdk/wit",
         world: "game-plugin",
     });
 }

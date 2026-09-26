@@ -6,7 +6,7 @@ use rps::RockPaperScissors;
 use tabletty_host::{Error, NativePlugin, Plugin, Runtime};
 
 fn rps_component_path() -> PathBuf {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/games/rps.wasm");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist/games/rps.wasm");
     assert!(
         path.exists(),
         "{} is missing; run `game-build rps` first",

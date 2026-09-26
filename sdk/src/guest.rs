@@ -8,7 +8,7 @@ use crate::{Game, raw};
 
 pub mod bindings {
     wit_bindgen::generate!({
-        path: "../../wit",
+        path: "wit",
         world: "game-plugin",
         pub_export_macro: true,
         export_macro_name: "export_game_plugin",

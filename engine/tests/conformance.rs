@@ -41,7 +41,7 @@ const TIC_TAC_TOE_SCRIPT: &[(PlayerId, &str)] = &[
 
 fn component(crate_name: &str) -> WasmPlugin {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../dist/games")
+        .join("../dist/games")
         .join(format!("{crate_name}.wasm"));
     assert!(
         path.exists(),
