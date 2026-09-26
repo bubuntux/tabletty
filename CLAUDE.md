@@ -19,10 +19,10 @@ devenv shell                    # enter the environment
 devenv test                     # runs the tabletty:check-toolchain task
 devenv shell -- ci              # everything CI runs: build games, import check, fmt, clippy, tests
 
-game-build <crate>              # build a game crate -> dist/games/<crate>.wasm
+game-build [crate...]           # build games -> dist/games/<crate>.wasm; all if none given
 game-imports <component.wasm>   # dump a component's world; imports MUST be empty
 
-cargo nextest run               # needs `game-build rps` and `game-build tic-tac-toe` first
+cargo nextest run               # needs `game-build` first
 cargo clippy --all-targets
 cargo fmt
 

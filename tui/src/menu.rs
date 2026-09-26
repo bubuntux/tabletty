@@ -82,7 +82,7 @@ impl Menu {
         );
 
         if games.is_empty() {
-            let text = "No games found. Build one with `game-build rps`, or drop a .wasm into \
+            let text = "No games found. Build them with `game-build`, or drop a .wasm into \
                         ~/.local/share/tabletty/games.";
             frame.render_widget(
                 Paragraph::new(text)

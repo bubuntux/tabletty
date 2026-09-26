@@ -41,7 +41,7 @@ Requires [devenv](https://devenv.sh):
 
 ```
 devenv shell
-game-build rps && game-build tic-tac-toe
+game-build              # builds every game into dist/games
 cargo run
 ```
 

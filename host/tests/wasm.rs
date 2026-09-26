@@ -1,4 +1,4 @@
-//! Loading and sandboxing. Needs `game-build rps` first.
+//! Loading and sandboxing. Needs `game-build` first.
 
 use std::path::PathBuf;
 
@@ -9,7 +9,7 @@ fn rps_component_path() -> PathBuf {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist/games/rps.wasm");
     assert!(
         path.exists(),
-        "{} is missing; run `game-build rps` first",
+        "{} is missing; run `game-build` first",
         path.display()
     );
     path

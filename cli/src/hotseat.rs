@@ -292,8 +292,7 @@ fn write_grid(out: &mut impl Write, columns: u8, items: &[Item]) -> io::Result<(
 
 #[cfg(test)]
 mod tests {
-    //! Golden transcripts, played through the real components. Needs
-    //! `game-build rps && game-build tic-tac-toe` first.
+    //! Golden transcripts, played through the real components. Needs `game-build` first.
 
     use super::*;
 
@@ -303,7 +302,7 @@ mod tests {
             .join(format!("{game_crate}.wasm"));
         assert!(
             path.exists(),
-            "{} is missing; run `game-build {game_crate}` first",
+            "{} is missing; run `game-build` first",
             path.display()
         );
         let plugin = Runtime::new(None).unwrap().load_file(&path).unwrap();

@@ -2,7 +2,7 @@
 //! must agree step for step — state bytes, effects, offered actions, and every
 //! player's view. Native tests catch rule bugs; this catches ABI bugs.
 //!
-//! Needs the components built first: `game-build rps && game-build tic-tac-toe`.
+//! Needs the components built first: `game-build`.
 
 use std::path::PathBuf;
 
@@ -45,7 +45,7 @@ fn component(crate_name: &str) -> WasmPlugin {
         .join(format!("{crate_name}.wasm"));
     assert!(
         path.exists(),
-        "{} is missing; run `game-build {crate_name}` first",
+        "{} is missing; run `game-build` first",
         path.display()
     );
     Runtime::new(None)

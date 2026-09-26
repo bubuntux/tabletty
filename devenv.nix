@@ -34,18 +34,35 @@
     pkgs.cargo-deny # enforces that tabletty-sdk stays dependency-thin
   ];
 
-  # Build a game crate and componentise it in one step. The dash/underscore
-  # swap bites every time: cargo writes love_letter.wasm for crate love-letter.
+  # Build game crates and componentise them in one step: `game-build` builds every
+  # crate under games/, `game-build rps tic-tac-toe` just those. One cargo call for
+  # all of them, so shared dependencies compile once. The dash/underscore swap
+  # bites every time: cargo writes love_letter.wasm for crate love-letter. Assumes
+  # each games/<dir> holds a crate named <dir>.
   scripts.game-build.exec = ''
     set -euo pipefail
-    crate="''${1:?usage: game-build <crate-name>}"
-    module="''${crate//-/_}"
-    cargo build --release --target wasm32-unknown-unknown -p "$crate"
+    cd "$DEVENV_ROOT"
+    if [ "$#" -gt 0 ]; then
+      crates=("$@")
+    else
+      crates=()
+      for dir in games/*/; do
+        crates+=("$(basename "$dir")")
+      done
+    fi
+    packages=()
+    for crate in "''${crates[@]}"; do
+      packages+=(-p "$crate")
+    done
+    cargo build --release --target wasm32-unknown-unknown "''${packages[@]}"
     mkdir -p dist/games
-    wasm-tools component new \
-      "target/wasm32-unknown-unknown/release/$module.wasm" \
-      -o "dist/games/$crate.wasm"
-    echo "dist/games/$crate.wasm"
+    for crate in "''${crates[@]}"; do
+      module="''${crate//-/_}"
+      wasm-tools component new \
+        "target/wasm32-unknown-unknown/release/$module.wasm" \
+        -o "dist/games/$crate.wasm"
+      echo "dist/games/$crate.wasm"
+    done
   '';
 
   # Confirm a built plugin really has no imports. If this prints anything under
@@ -57,12 +74,13 @@
 
   # Everything CI checks, runnable locally with `devenv shell -- ci`. Components
   # are built first because the conformance and golden-transcript tests load them
-  # from dist/games. Assumes each games/<dir> holds a crate named <dir>.
+  # from dist/games.
   scripts.ci.exec = ''
     set -euo pipefail
+    cd "$DEVENV_ROOT"
+    game-build
     for dir in games/*/; do
       crate="$(basename "$dir")"
-      game-build "$crate"
       if wasm-tools component wit "dist/games/$crate.wasm" | grep -E '^\s*import'; then
         echo "error: $crate imports something; plugins must import nothing" >&2
         exit 1
@@ -79,7 +97,7 @@
     echo "  $(wasm-tools --version)"
     echo "  targets: $(rustc --print target-list | grep -c wasm32) wasm variants available"
     echo
-    echo "  game-build <crate>      build + componentise a game plugin"
+    echo "  game-build [crate...]   build + componentise game plugins (all if none given)"
     echo "  game-imports <wasm>     dump a component's world (imports must be empty)"
   '';
 
