@@ -226,10 +226,16 @@ fn write_view(out: &mut impl Write, view: &View) -> io::Result<()> {
         writeln!(out, "  [{}]", zone.label)?;
         match zone.layout {
             Layout::Grid(columns) => write_grid(out, columns, &zone.items)?,
-            Layout::Row | Layout::Stack => {
+            Layout::Row | Layout::Stack | Layout::Hand => {
                 for item in &zone.items {
                     write_item(out, item)?;
                 }
+            }
+            Layout::Pile => {
+                if let Some(top) = zone.items.last() {
+                    write_item(out, top)?;
+                }
+                writeln!(out, "    ({} in pile)", zone.items.len())?;
             }
         }
     }
@@ -243,11 +249,13 @@ fn write_view(out: &mut impl Write, view: &View) -> io::Result<()> {
     Ok(())
 }
 
-fn face_text(face: &Face) -> &str {
+fn face_text(face: &Face) -> String {
     match face {
-        Face::Up(art) => art,
-        Face::Down => "##",
-        Face::Empty => ".",
+        Face::Up(art) => art.clone(),
+        Face::Down => "##".into(),
+        Face::Empty => ".".into(),
+        Face::Die(pips) => format!("die:{pips}"),
+        Face::Track(track) => format!("{}/{}", track.filled, track.total),
     }
 }
 

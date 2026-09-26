@@ -74,9 +74,23 @@ Two things about the types that WIT can't say:
 action is reachable by selecting a card or by picking from an explicit list, and the
 TUI decides which affordance to show. They are the same value, not two encodings.
 
-`face.up` carries an art *key*, never glyphs. Keeping the renderer in charge of visuals
-is what makes every game look like one application, and it means a plugin can't smuggle
-escape sequences into the terminal.
+Presentation is layered so no frontend is baked into the contract — a web page could
+draw the same view tree a terminal does:
+
+- **Semantic components** the renderer draws itself, no art needed: `die`, `track`, and
+  the `hand` and `pile` layouts. A standard-deck `card(rank, suit)` face is the obvious
+  next one, deferred until a game needs it.
+- **Hints** — `shape`, `size`, `tone` — say what the game wants; the renderer decides
+  how, and may override them to fit the screen. `tone` is semantic (`good`, `player(n)`),
+  never RGB, so games can't clash with a theme.
+- **Art** the game draws itself, declared once through the `art` export and referenced by
+  key from `face.up`: an SVG for renderers that can show images, a single-width `glyph`
+  for tight spaces, and a `label` that always works. The TUI rasterises the SVG (Kitty,
+  iTerm2 or Sixel where the terminal supports it, half-blocks elsewhere).
+
+All of it is untrusted input: labels and glyphs are stripped of control characters so a
+plugin can't smuggle escape sequences into the terminal, SVGs are size-capped and never
+load external references, and wide glyphs are dropped rather than misaligning the board.
 
 ### State and actions are opaque bytes
 

@@ -84,6 +84,10 @@ world game-plugin {
     /// Items fill rows of this many columns, left to right.
     grid(u8),
     stack,
+    /// A hand of cards: a row that overlaps its items when space is short.
+    hand,
+    /// A deck or discard pile: only the last item is drawn, with how many there are.
+    pile,
   }
 
   record item {
@@ -93,13 +97,47 @@ world game-plugin {
     badges:     list<string>,
     /// Makes the item a click/enter target.
     selectable: option<action-spec>,
+    /// Presentation hints. Absent means the renderer picks from the zone's layout,
+    /// and a renderer may override them, e.g. to fit a small screen.
+    shape:      option<shape>,
+    size:       option<size>,
+    tone:       option<tone>,
   }
 
   variant face {
-    /// An art key, e.g. `"guard"`. The renderer owns the glyphs.
+    /// An art key: one of the game's `art`, or else shown as the key itself.
     up(string),
     down,
     empty,
+    /// A die showing this many pips; the renderer draws it.
+    die(u8),
+    /// Progress along a track, e.g. 3 of 7 tokens; the renderer draws it.
+    track(track),
+  }
+
+  record track { filled: u32, total: u32 }
+
+  /// How an item is framed.
+  enum shape { plain, card, tile, token, icon }
+  enum size { small, medium, large }
+
+  /// A semantic colour. Each renderer maps it onto its own theme, so games never
+  /// pick RGB values that clash or vanish on a dark background.
+  variant tone { neutral, accent, good, bad, player(player-id) }
+
+  /// Art the game draws itself, declared once and referred to by key from `face.up`.
+  /// Renderers use the best rendition they can show, falling back to `label`.
+  record art {
+    key:   string,
+    /// Accessible name, and the fallback when nothing else fits.
+    label: string,
+    /// One or two single-width characters for tight spaces. Renderers may drop
+    /// anything wider.
+    glyph: option<string>,
+    /// The full picture. Draw shapes only: text needs fonts a renderer may not have,
+    /// and external references (`<image href>`) are never loaded.
+    svg:   option<string>,
+    tone:  option<tone>,
   }
 
   record log-line { text: string, kind: log-kind }
@@ -118,4 +156,5 @@ world game-plugin {
   export apply:    func(st: state, p: player-id, a: action)
                      -> result<tuple<state, list<effect>>, string>;
   export view:     func(st: state, p: option<player-id>) -> view;
+  export art:      func() -> list<art>;
 }

@@ -8,8 +8,8 @@ use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use rps::RockPaperScissors;
 use tabletty_host::{Error, NativePlugin, Plugin, Transition};
-use tabletty_sdk::{ActionSpec, InitCtx, Manifest, PlayerId, View};
-use tabletty_tui::{App, GameEntry};
+use tabletty_sdk::{ActionSpec, Art, InitCtx, Manifest, PlayerId, View};
+use tabletty_tui::{App, GameEntry, Graphics};
 use tic_tac_toe::TicTacToe;
 
 fn entry(plugin: impl Plugin + 'static) -> GameEntry {
@@ -24,7 +24,7 @@ fn app() -> App {
         entry(NativePlugin::<RockPaperScissors>::new()),
         entry(NativePlugin::<TicTacToe>::new()),
     ];
-    App::new(games, Box::new(|| [0; 32]))
+    App::new(games, Box::new(|| [0; 32]), Graphics::Text)
 }
 
 fn press(app: &mut App, keys: &[KeyCode]) {
@@ -116,6 +116,9 @@ impl Plugin for Crashing {
     fn view(&self, state: &[u8], viewer: Option<PlayerId>) -> Result<View, Error> {
         self.0.view(state, viewer)
     }
+    fn art(&self) -> Result<Vec<Art>, Error> {
+        self.0.art()
+    }
 }
 
 #[test]
@@ -123,6 +126,7 @@ fn a_failing_plugin_ends_the_match_not_the_app() {
     let mut app = App::new(
         vec![entry(Crashing(NativePlugin::new()))],
         Box::new(|| [0; 32]),
+        Graphics::Text,
     );
     app.start(0, 2);
     press(&mut app, &[Enter, Enter]);
@@ -133,4 +137,38 @@ fn a_failing_plugin_ends_the_match_not_the_app() {
         menu.contains("The game stopped: plugin ran out of fuel"),
         "{menu}"
     );
+}
+
+#[test]
+fn art_is_drawn_as_an_image_where_the_terminal_allows() {
+    let games = vec![entry(NativePlugin::<RockPaperScissors>::new())];
+    let mut app = App::new(games, Box::new(|| [0; 32]), Graphics::Halfblocks);
+    app.start(0, 2);
+    press(&mut app, &[Enter]);
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+    terminal.draw(|frame| app.render(frame)).unwrap();
+    let buffer = terminal.backend().buffer();
+    let halfblocks = buffer
+        .content()
+        .iter()
+        .filter(|cell| cell.symbol() == "▀")
+        .count();
+    assert!(
+        halfblocks > 50,
+        "expected the throw icons as half-block images"
+    );
+    insta::assert_snapshot!(terminal.backend().to_string());
+}
+
+#[test]
+fn text_mode_falls_back_to_glyphs() {
+    let mut app = app();
+    app.start(0, 2);
+    press(&mut app, &[Enter]);
+    let screen = screen(&app);
+    assert!(!screen.contains('▀'), "{screen}");
+    for glyph in ["●", "▯", "✂"] {
+        assert!(screen.contains(glyph), "missing {glyph}:\n{screen}");
+    }
 }

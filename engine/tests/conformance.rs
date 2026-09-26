@@ -93,6 +93,7 @@ fn assert_conforms<G: Game>(crate_name: &str, script: &[(PlayerId, &str)]) {
     let mut native = start(NativePlugin::<G>::new());
     let mut wasm = start(component(crate_name));
     assert_eq!(native.manifest(), wasm.manifest());
+    assert_eq!(native.plugin().art().unwrap(), wasm.plugin().art().unwrap());
     assert_eq!(snapshot(&native), snapshot(&wasm), "after init");
 
     for (step, &(player, action_id)) in script.iter().enumerate() {

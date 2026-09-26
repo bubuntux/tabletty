@@ -1,11 +1,20 @@
-//! Turning plugin output into terminal cells.
+//! A game's own art, and the colours we give its tones.
 //!
-//! Plugins name their art with keys; the glyphs and colours are ours. Every string a
-//! plugin hands us is untrusted and goes through [`clean`] before it reaches a cell.
+//! Everything a plugin hands us is untrusted: strings go through [`clean`] before
+//! they reach a cell, glyphs are held to single-width characters, and oversized
+//! art is dropped rather than rendered.
 
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
-use tabletty_sdk::Face;
+use std::collections::HashMap;
+
+use ratatui::style::Color;
+use tabletty_sdk::{Art, Tone};
+use unicode_width::UnicodeWidthChar;
+
+/// More than any card game needs; keeps a hostile plugin from ballooning memory.
+const MAX_ART_ENTRIES: usize = 512;
+const MAX_SVG_BYTES: usize = 64 * 1024;
+/// A glyph is for tight spaces: at most this many single-width characters.
+const MAX_GLYPH_CHARS: usize = 2;
 
 /// Strip control characters, so a plugin can't smuggle escape sequences into the
 /// terminal through a label.
@@ -13,28 +22,98 @@ pub fn clean(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).collect()
 }
 
-/// How a face looks on screen.
-pub fn face(face: &Face) -> Span<'static> {
-    match face {
-        Face::Up(key) => up(key),
-        Face::Down => Span::styled("▒▒▒", Style::new().fg(Color::DarkGray)),
-        Face::Empty => Span::styled("·", Style::new().fg(Color::DarkGray)),
+/// Keep a glyph to single-width characters. Wide characters (most emoji) render at
+/// different widths in different terminals and would break alignment.
+fn single_width(glyph: &str) -> Option<String> {
+    let kept: String = glyph
+        .chars()
+        .filter(|c| !c.is_control() && c.width() == Some(1))
+        .take(MAX_GLYPH_CHARS)
+        .collect();
+    (!kept.is_empty()).then_some(kept)
+}
+
+pub fn tone_color(tone: Tone) -> Color {
+    const PLAYERS: [Color; 6] = [
+        Color::Red,
+        Color::Blue,
+        Color::Green,
+        Color::Yellow,
+        Color::Magenta,
+        Color::Cyan,
+    ];
+    match tone {
+        Tone::Neutral => Color::Gray,
+        Tone::Accent => Color::Magenta,
+        Tone::Good => Color::Green,
+        Tone::Bad => Color::Red,
+        Tone::Player(player) => PLAYERS[usize::from(player) % PLAYERS.len()],
     }
 }
 
-/// Known art keys get a glyph of their own; anything else is shown as its key.
-fn up(key: &str) -> Span<'static> {
-    let bold = Style::new().add_modifier(Modifier::BOLD);
-    match key {
-        "x" => Span::styled("X", bold.fg(Color::Red)),
-        "o" => Span::styled("O", bold.fg(Color::Blue)),
-        _ => Span::styled(clean(key).to_uppercase(), bold),
+/// One game's art, cleaned up and looked up by key.
+#[derive(Debug, Default)]
+pub struct ArtBook {
+    entries: HashMap<String, Entry>,
+}
+
+#[derive(Debug)]
+pub struct Entry {
+    pub label: String,
+    pub glyph: Option<String>,
+    pub svg: Option<String>,
+    pub tone: Option<Tone>,
+}
+
+impl ArtBook {
+    pub fn new(art: Vec<Art>) -> Self {
+        if art.len() > MAX_ART_ENTRIES {
+            tracing::warn!(
+                count = art.len(),
+                "game declares too much art; keeping the first {MAX_ART_ENTRIES}"
+            );
+        }
+        let entries = art
+            .into_iter()
+            .take(MAX_ART_ENTRIES)
+            .map(|art| {
+                let svg = art.svg.filter(|svg| {
+                    let fits = svg.len() <= MAX_SVG_BYTES;
+                    if !fits {
+                        tracing::warn!(key = %art.key, bytes = svg.len(), "dropping oversized svg");
+                    }
+                    fits
+                });
+                let entry = Entry {
+                    label: clean(&art.label),
+                    glyph: art.glyph.as_deref().and_then(single_width),
+                    svg,
+                    tone: art.tone,
+                };
+                (art.key, entry)
+            })
+            .collect();
+        Self { entries }
+    }
+
+    pub fn get(&self, key: &str) -> Option<&Entry> {
+        self.entries.get(key)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn art(key: &str, glyph: Option<&str>, svg: Option<String>) -> Art {
+        Art {
+            key: key.into(),
+            label: format!("{key}\x1b[31m"),
+            glyph: glyph.map(Into::into),
+            svg,
+            tone: None,
+        }
+    }
 
     #[test]
     fn escape_sequences_are_stripped() {
@@ -43,7 +122,22 @@ mod tests {
     }
 
     #[test]
-    fn unknown_art_keys_are_cleaned_too() {
-        assert_eq!(face(&Face::Up("gu\x1bard".into())).content, "GUARD");
+    fn glyphs_keep_only_single_width_characters() {
+        let book = ArtBook::new(vec![
+            art("fist", Some("✊R"), None),
+            art("wide", Some("✊"), None),
+            art("long", Some("ABCD"), None),
+        ]);
+        assert_eq!(book.get("fist").unwrap().glyph.as_deref(), Some("R"));
+        assert_eq!(book.get("wide").unwrap().glyph, None);
+        assert_eq!(book.get("long").unwrap().glyph.as_deref(), Some("AB"));
+        assert_eq!(book.get("fist").unwrap().label, "fist[31m");
+    }
+
+    #[test]
+    fn oversized_svg_is_dropped() {
+        let huge = "x".repeat(MAX_SVG_BYTES + 1);
+        let book = ArtBook::new(vec![art("big", None, Some(huge))]);
+        assert!(book.get("big").unwrap().svg.is_none());
     }
 }

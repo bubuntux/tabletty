@@ -49,6 +49,10 @@ impl<G: Game> wit::Guest for Adapter<G> {
     fn view(state: wit::State, viewer: Option<wit::PlayerId>) -> wit::View {
         raw::view::<G>(&state, viewer).into()
     }
+
+    fn art() -> Vec<wit::Art> {
+        raw::art::<G>()
+    }
 }
 
 impl From<crate::ActionSpec> for wit::ActionSpec {
@@ -93,6 +97,9 @@ impl From<crate::Item> for wit::Item {
             sublabel: item.sublabel,
             badges: item.badges,
             selectable: item.selectable.map(Into::into),
+            shape: item.shape,
+            size: item.size,
+            tone: item.tone,
         }
     }
 }

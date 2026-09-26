@@ -18,7 +18,7 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tabletty_sdk::{ActionSpec, Effect, InitCtx, Manifest, PlayerId, View};
+use tabletty_sdk::{ActionSpec, Art, Effect, InitCtx, Manifest, PlayerId, View};
 
 pub trait Plugin {
     fn manifest(&self) -> Result<Manifest, Error>;
@@ -37,6 +37,9 @@ pub trait Plugin {
     ) -> Result<Result<Transition, String>, Error>;
 
     fn view(&self, state: &[u8], viewer: Option<PlayerId>) -> Result<View, Error>;
+
+    /// The game's own art. Static per component, so callers fetch it once.
+    fn art(&self) -> Result<Vec<Art>, Error>;
 }
 
 /// Lets one loaded plugin back several matches, e.g. a menu that can start a game
@@ -65,6 +68,10 @@ impl<P: Plugin + ?Sized> Plugin for Arc<P> {
 
     fn view(&self, state: &[u8], viewer: Option<PlayerId>) -> Result<View, Error> {
         (**self).view(state, viewer)
+    }
+
+    fn art(&self) -> Result<Vec<Art>, Error> {
+        (**self).art()
     }
 }
 

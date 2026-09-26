@@ -4,7 +4,7 @@
 //! Both the component glue and the host's native test harness go through here, so a
 //! game behaves identically whether it runs as WASM or as a native library.
 
-use crate::{ActionSpec, Effect, Game, InitCtx, Manifest, Payload, PlayerId, View};
+use crate::{ActionSpec, Art, Effect, Game, InitCtx, Manifest, Payload, PlayerId, View};
 
 pub fn manifest<G: Game>() -> Manifest {
     G::manifest()
@@ -35,6 +35,10 @@ pub fn apply<G: Game>(
 
 pub fn view<G: Game>(state: &[u8], viewer: Option<PlayerId>) -> View<Payload> {
     G::view(&decode_state::<G>(state), viewer).map_payloads(|action| encode(&action))
+}
+
+pub fn art<G: Game>() -> Vec<Art> {
+    G::art()
 }
 
 fn encode(value: &impl serde::Serialize) -> Vec<u8> {

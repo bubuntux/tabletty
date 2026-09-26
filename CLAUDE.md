@@ -51,14 +51,15 @@ post-game audit — the failure shows up much later and far from the cause.
   one non-deterministic corner of WASM arithmetic.
 - **`tabletty-sdk` stays dependency-thin.** No tokio, no iroh, no ratatui. It is the only
   crate a plugin author depends on.
-- **Plugins never render.** They emit the declarative `view` tree; the TUI owns all glyphs
-  and styling. `face.up` carries an art key, never terminal output.
+- **Plugins never render.** They emit the declarative `view` tree and declare their art
+  (SVG, glyph, label) as data; the frontend decides how to draw it. Nothing a plugin sends
+  is terminal output, and every string is sanitised before it reaches a cell.
 - **Never `println!`.** stdout is the UI. Log through `tracing` to a file.
 
 ## Layout
 
 `sdk/` (with the contract in `sdk/wit/game.wit`), `host/`, `engine/`, `cli/` (the
-`tabletty` binary), later `net/` and `tui/`, and `games/*` for the plugins. Directories
+`tabletty` binary), `tui/`, later `net/`, and `games/*` for the plugins. Directories
 drop the `tabletty-` prefix; package names keep it. See the Layout section of
 `docs/PLAN.md` for what each one owns.
 

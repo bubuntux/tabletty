@@ -6,8 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 use tabletty_sdk::{
-    ActionSpec, Effect, Face, Game, InitCtx, Item, Layout, Manifest, Outcome, Player, PlayerId,
-    View, Zone,
+    ActionSpec, Art, Effect, Face, Game, InitCtx, Item, Layout, Manifest, Outcome, Player,
+    PlayerId, Tone, View, Zone,
 };
 
 const LINES: [[usize; 3]; 8] = [
@@ -191,7 +191,8 @@ impl Game for TicTacToe {
             .map(|index| {
                 let square = Square(index);
                 match state.board[usize::from(index)] {
-                    Some(seat) => Item::new(Face::Up(mark(seat).into()), square.name()),
+                    Some(seat) => Item::new(Face::Up(mark(seat).into()), square.name())
+                        .tone(Tone::Player(state.players[usize::from(seat)].id)),
                     None => Item {
                         selectable: viewer_to_move.then(|| place(square)),
                         ..Item::new(Face::Empty, square.name())
@@ -211,6 +212,18 @@ impl Game for TicTacToe {
             log: Vec::new(),
             prompt: None,
         }
+    }
+
+    fn art() -> Vec<Art> {
+        (0..2)
+            .map(|seat| Art {
+                key: mark(seat).into(),
+                label: mark(seat).to_uppercase(),
+                glyph: Some(mark(seat).to_uppercase()),
+                svg: None,
+                tone: None,
+            })
+            .collect()
     }
 }
 

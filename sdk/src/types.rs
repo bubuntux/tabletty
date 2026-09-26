@@ -10,8 +10,8 @@
 use serde::{Deserialize, Serialize};
 
 pub use crate::guest::bindings::{
-    Effect, Face, InitCtx, Layout, LogKind, LogLine, Manifest, Outcome, Player, PlayerId,
-    PrivateMsg, Timer,
+    Art, Effect, Face, InitCtx, Layout, LogKind, LogLine, Manifest, Outcome, Player, PlayerId,
+    PrivateMsg, Shape, Size, Timer, Tone, Track,
 };
 
 /// An encoded action: what actually crosses the boundary.
@@ -116,10 +116,14 @@ pub struct Item<A = Payload> {
     pub badges: Vec<String>,
     /// Makes the item a click/enter target.
     pub selectable: Option<ActionSpec<A>>,
+    /// Presentation hints. `None` lets the renderer choose from the zone's layout.
+    pub shape: Option<Shape>,
+    pub size: Option<Size>,
+    pub tone: Option<Tone>,
 }
 
 impl<A> Item<A> {
-    /// An item with just a face and a label.
+    /// An item with just a face and a label; the renderer picks how to frame it.
     pub fn new(face: Face, label: impl Into<String>) -> Self {
         Self {
             face,
@@ -127,7 +131,25 @@ impl<A> Item<A> {
             sublabel: String::new(),
             badges: Vec::new(),
             selectable: None,
+            shape: None,
+            size: None,
+            tone: None,
         }
+    }
+
+    pub fn shape(mut self, shape: Shape) -> Self {
+        self.shape = Some(shape);
+        self
+    }
+
+    pub fn size(mut self, size: Size) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    pub fn tone(mut self, tone: Tone) -> Self {
+        self.tone = Some(tone);
+        self
     }
 
     pub fn map_payloads<B>(self, f: impl FnOnce(A) -> B) -> Item<B> {
@@ -137,6 +159,9 @@ impl<A> Item<A> {
             sublabel: self.sublabel,
             badges: self.badges,
             selectable: self.selectable.map(|spec| spec.map_payload(f)),
+            shape: self.shape,
+            size: self.size,
+            tone: self.tone,
         }
     }
 }

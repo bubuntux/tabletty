@@ -24,12 +24,20 @@ anyhow = "1"
 blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 getrandom = "0.4"
+image = { version = "0.25", default-features = false }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 ratatui = "0.30"
+# No default features: no chafa (a C library), just the crossterm backend.
+ratatui-image = { version = "11.1", default-features = false, features = ["crossterm"] }
+# No text (needs system fonts) and no embedded bitmaps: game art is shapes only.
+resvg = { version = "0.48", default-features = false }
+# Unix only: a thread-free check that the terminal answers queries (see tui/src/probe.rs).
+rustix = { version = "1", features = ["event", "stdio"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+unicode-width = "0.2"
 
 insta = "1"

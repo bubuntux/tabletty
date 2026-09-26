@@ -14,7 +14,10 @@ type `help` for commands
   [This round]
     P0: ## (thrown)
     P1: . (thinking)
-  prompt: Your throw [rock, paper, scissors]
+  [Your throw]
+    Rock: rock -> rock
+    Paper: paper -> paper
+    Scissors: scissors -> scissors
 > 1 rock
   (to P1) You throw rock.
   Round 1: P0 throws rock, P1 throws rock — a draw.

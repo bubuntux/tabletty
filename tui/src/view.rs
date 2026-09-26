@@ -2,18 +2,15 @@
 //! acted on.
 
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Paragraph};
-use tabletty_sdk::{ActionSpec, Item, Layout as ZoneLayout, Prompt, View, Zone};
+use ratatui::widgets::{Block, Paragraph};
+use tabletty_sdk::{ActionSpec, Layout as ZoneLayout, Prompt, Size, View, Zone};
 
-use crate::art::{self, clean};
+use crate::art::clean;
+use crate::item::{self, Ctx, Look};
 
-/// Row cards: border, face, label, sublabel, border.
-const CARD_HEIGHT: u16 = 5;
-/// Grid cells: border (carrying the label), face, border.
-const CELL_HEIGHT: u16 = 3;
 const PROMPT_HEIGHT: u16 = 3;
 const MAX_LOG_LINES: usize = 5;
 
@@ -55,16 +52,20 @@ pub fn with_fallback_prompt(mut view: View, actions: Vec<ActionSpec>) -> View {
 }
 
 /// Everything the viewer can act on, in reading order. Disabled actions are drawn
-/// but can't take focus.
+/// but can't take focus, and neither can anything under the top of a pile.
 pub fn targets(view: &View) -> Vec<Target> {
     let items = view
         .zones
         .iter()
         .enumerate()
         .flat_map(|(zone_index, zone)| {
+            let top_of_pile = zone.items.len().saturating_sub(1);
             zone.items
                 .iter()
                 .enumerate()
+                .filter(move |&(item_index, _)| {
+                    zone.layout != ZoneLayout::Pile || item_index == top_of_pile
+                })
                 .filter_map(move |(item_index, item)| {
                     let spec = item.selectable.as_ref().filter(|spec| spec.enabled)?;
                     Some(Target {
@@ -138,7 +139,10 @@ pub fn step(view: &View, targets: &[Target], focus: usize, direction: Direction)
 /// Draw `view`'s zones, log and prompt into `area`, highlighting the focused target
 /// if there is one. The status line is drawn separately by [`status_line`], so the
 /// caller can give it the full width.
-pub fn render(frame: &mut Frame, area: Rect, view: &View, focused: Option<Place>) {
+///
+/// Items are drawn at the size the game hinted if everything fits, and shrunk
+/// step by step until it does.
+pub fn render(frame: &mut Frame, area: Rect, view: &View, focused: Option<Place>, ctx: &Ctx) {
     let log_lines: Vec<&str> = view
         .log
         .iter()
@@ -147,32 +151,57 @@ pub fn render(frame: &mut Frame, area: Rect, view: &View, focused: Option<Place>
         .rev()
         .map(|line| line.text.as_str())
         .collect();
+    let log_height = if log_lines.is_empty() {
+        0
+    } else {
+        log_lines.len() as u16 + 2
+    };
+    let prompt_height = if view.prompt.is_some() {
+        PROMPT_HEIGHT
+    } else {
+        0
+    };
 
-    let mut constraints = Vec::new();
-    constraints.extend(
+    let zones_height = |cap| -> u16 {
         view.zones
             .iter()
-            .map(|zone| Constraint::Length(zone_height(zone))),
-    );
-    if !log_lines.is_empty() {
-        constraints.push(Constraint::Length(log_lines.len() as u16 + 2));
-    }
-    if view.prompt.is_some() {
-        constraints.push(Constraint::Length(PROMPT_HEIGHT));
-    }
+            .map(|zone| zone_height(zone, area.width, cap, ctx))
+            .sum()
+    };
+    // Without images, large art is just a glyph in a big empty box.
+    let caps: &[Size] = if ctx.pictures.enabled() {
+        &[Size::Large, Size::Medium]
+    } else {
+        &[Size::Medium]
+    };
+    let cap = caps
+        .iter()
+        .copied()
+        .find(|&cap| zones_height(cap) + log_height + prompt_height <= area.height)
+        .unwrap_or(Size::Small);
+
+    let mut constraints: Vec<Constraint> = view
+        .zones
+        .iter()
+        .map(|zone| Constraint::Length(zone_height(zone, area.width, cap, ctx)))
+        .collect();
+    constraints.push(Constraint::Length(log_height));
+    constraints.push(Constraint::Length(prompt_height));
     constraints.push(Constraint::Min(0));
     let areas = Layout::vertical(constraints).split(area);
-    let mut areas = areas.iter().copied();
 
     for (zone_index, zone) in view.zones.iter().enumerate() {
         render_zone(
             frame,
-            areas.next().unwrap_or_default(),
+            areas[zone_index],
             zone,
             zone_index,
             focused,
+            cap,
+            ctx,
         );
     }
+    let after_zones = view.zones.len();
     if !log_lines.is_empty() {
         let lines: Vec<Line> = log_lines
             .into_iter()
@@ -180,7 +209,7 @@ pub fn render(frame: &mut Frame, area: Rect, view: &View, focused: Option<Place>
             .collect();
         frame.render_widget(
             Paragraph::new(lines).block(Block::bordered().title(" Log ")),
-            areas.next().unwrap_or_default(),
+            areas[after_zones],
         );
     }
     if let Some(prompt) = &view.prompt {
@@ -188,12 +217,7 @@ pub fn render(frame: &mut Frame, area: Rect, view: &View, focused: Option<Place>
             Some(Place::Choice(index)) => Some(index),
             _ => None,
         };
-        render_prompt(
-            frame,
-            areas.next().unwrap_or_default(),
-            prompt,
-            focused_choice,
-        );
+        render_prompt(frame, areas[after_zones + 1], prompt, focused_choice);
     }
 }
 
@@ -212,16 +236,54 @@ pub fn status_line(view: &View) -> Paragraph<'static> {
     Paragraph::new(Line::from(spans))
 }
 
-fn zone_height(zone: &Zone) -> u16 {
-    let borders = 2;
-    match zone.layout {
-        ZoneLayout::Row => CARD_HEIGHT + borders,
+/// Rows a zone needs at `width`, borders included, with item sizes capped at `cap`.
+fn zone_height(zone: &Zone, width: u16, cap: Size, ctx: &Ctx) -> u16 {
+    let sizes: Vec<(u16, u16)> = zone
+        .items
+        .iter()
+        .map(|item| item::size(item, Look::of(item, zone.layout, cap), ctx))
+        .collect();
+    let tallest = |indices: &[usize]| {
+        indices
+            .iter()
+            .map(|&index| sizes[index].1)
+            .max()
+            .unwrap_or(0)
+    };
+    let all: Vec<usize> = (0..sizes.len()).collect();
+    let content = match zone.layout {
+        ZoneLayout::Row => row_lines(&sizes, width.saturating_sub(2))
+            .iter()
+            .map(|line| tallest(line))
+            .sum(),
+        ZoneLayout::Hand => tallest(&all),
+        ZoneLayout::Pile => sizes.last().map_or(0, |&(_, height)| height),
         ZoneLayout::Grid(columns) => {
-            let rows = zone.items.len().div_ceil(usize::from(columns.max(1)));
-            rows as u16 * CELL_HEIGHT + borders
+            let rows = sizes.len().div_ceil(usize::from(columns.max(1)));
+            rows as u16 * tallest(&all)
         }
-        ZoneLayout::Stack => zone.items.len() as u16 + borders,
+        ZoneLayout::Stack => sizes.iter().map(|&(_, height)| height).sum(),
+    };
+    content.max(1) + 2
+}
+
+/// Pack items left to right into lines no wider than `width`, one cell apart.
+fn row_lines(sizes: &[(u16, u16)], width: u16) -> Vec<Vec<usize>> {
+    let mut lines: Vec<Vec<usize>> = Vec::new();
+    let mut used = 0;
+    for (index, &(item_width, _)) in sizes.iter().enumerate() {
+        match lines.last_mut() {
+            Some(line) if used + 1 + item_width <= width => {
+                line.push(index);
+                used += 1 + item_width;
+            }
+            _ => {
+                lines.push(vec![index]);
+                used = item_width;
+            }
+        }
     }
+    lines
 }
 
 fn render_zone(
@@ -230,6 +292,8 @@ fn render_zone(
     zone: &Zone,
     zone_index: usize,
     focused: Option<Place>,
+    cap: Size,
+    ctx: &Ctx,
 ) {
     let block = Block::bordered()
         .border_style(Style::new().fg(Color::DarkGray))
@@ -244,133 +308,101 @@ fn render_zone(
                 item: item_index,
             })
     };
+    let looks: Vec<Look> = zone
+        .items
+        .iter()
+        .map(|item| Look::of(item, zone.layout, cap))
+        .collect();
+    let sizes: Vec<(u16, u16)> = zone
+        .items
+        .iter()
+        .zip(&looks)
+        .map(|(item, &look)| item::size(item, look, ctx))
+        .collect();
+    let draw = |frame: &mut Frame, index: usize, x: u16, y: u16, width: u16| {
+        let rect = Rect::new(x, y, width, sizes[index].1).intersection(inner);
+        if !rect.is_empty() {
+            item::draw(
+                frame,
+                rect,
+                &zone.items[index],
+                looks[index],
+                is_focused(index),
+                ctx,
+            );
+        }
+    };
+
     match zone.layout {
         ZoneLayout::Row => {
-            let widths = zone
-                .items
-                .iter()
-                .map(|item| Constraint::Length(card_width(item)));
-            let cells = Layout::horizontal(widths).spacing(1).split(inner);
-            for (index, (item, cell)) in zone.items.iter().zip(cells.iter()).enumerate() {
-                render_card(frame, *cell, item, is_focused(index));
+            let mut y = inner.y;
+            for line in row_lines(&sizes, inner.width) {
+                let mut x = inner.x;
+                for &index in &line {
+                    draw(frame, index, x, y, sizes[index].0);
+                    x = x.saturating_add(sizes[index].0 + 1);
+                }
+                let height = line.iter().map(|&index| sizes[index].1).max().unwrap_or(0);
+                y = y.saturating_add(height);
+            }
+        }
+        ZoneLayout::Hand => {
+            // Side by side if they fit; otherwise fanned, each card overlapping the
+            // last, with the focused card drawn on top.
+            let total: u16 = sizes.iter().map(|&(width, _)| width + 1).sum();
+            let last_width = sizes.last().map_or(0, |&(width, _)| width);
+            let step = |index: usize| -> u16 {
+                if total <= inner.width + 1 || sizes.len() < 2 {
+                    sizes[..index].iter().map(|&(width, _)| width + 1).sum()
+                } else {
+                    let room = inner.width.saturating_sub(last_width);
+                    (room / (sizes.len() as u16 - 1)).max(1) * index as u16
+                }
+            };
+            let mut order: Vec<usize> = (0..sizes.len()).collect();
+            if let Some(position) = order.iter().position(|&index| is_focused(index)) {
+                let focused = order.remove(position);
+                order.push(focused);
+            }
+            for index in order {
+                draw(frame, index, inner.x + step(index), inner.y, sizes[index].0);
+            }
+        }
+        ZoneLayout::Pile => {
+            if let Some(top) = sizes.len().checked_sub(1) {
+                let width = sizes[top].0;
+                draw(frame, top, inner.x, inner.y, width);
+                if zone.items.len() > 1 {
+                    let count = Paragraph::new(format!(" ×{}", zone.items.len()))
+                        .style(Style::new().fg(Color::DarkGray));
+                    let rect = Rect::new(inner.x + width, inner.y, 6, 1).intersection(inner);
+                    frame.render_widget(count, rect);
+                }
             }
         }
         ZoneLayout::Grid(columns) => {
             let columns = usize::from(columns.max(1));
-            let cell_width = zone.items.iter().map(cell_width).max().unwrap_or(0);
-            let rows = Layout::vertical(
-                zone.items
-                    .chunks(columns)
-                    .map(|_| Constraint::Length(CELL_HEIGHT)),
-            )
-            .split(inner);
-            for (row_index, (row, row_area)) in
-                zone.items.chunks(columns).zip(rows.iter()).enumerate()
-            {
-                let cells = Layout::horizontal(row.iter().map(|_| Constraint::Length(cell_width)))
-                    .split(*row_area);
-                for (column, (item, cell)) in row.iter().zip(cells.iter()).enumerate() {
-                    render_cell(frame, *cell, item, is_focused(row_index * columns + column));
-                }
+            let cell_width = sizes.iter().map(|&(width, _)| width).max().unwrap_or(0);
+            let cell_height = sizes.iter().map(|&(_, height)| height).max().unwrap_or(0);
+            for index in 0..sizes.len() {
+                let x = inner.x + (index % columns) as u16 * cell_width;
+                let y = inner.y + (index / columns) as u16 * cell_height;
+                draw(frame, index, x, y, cell_width);
             }
         }
         ZoneLayout::Stack => {
-            let lines: Vec<Line> = zone
-                .items
-                .iter()
-                .enumerate()
-                .map(|(index, item)| stack_line(item, is_focused(index)))
-                .collect();
-            frame.render_widget(Paragraph::new(lines), inner);
+            let mut y = inner.y;
+            for (index, &(width, height)) in sizes.iter().enumerate() {
+                let width = if looks[index].shape == tabletty_sdk::Shape::Plain {
+                    inner.width
+                } else {
+                    width
+                };
+                draw(frame, index, inner.x, y, width);
+                y = y.saturating_add(height);
+            }
         }
     }
-}
-
-fn border(item: &Item, focused: bool) -> (BorderType, Style) {
-    let selectable = item.selectable.as_ref().is_some_and(|spec| spec.enabled);
-    if focused {
-        (
-            BorderType::Thick,
-            Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-        )
-    } else if selectable {
-        (BorderType::Rounded, Style::new().fg(Color::Cyan))
-    } else {
-        (BorderType::Rounded, Style::new().fg(Color::DarkGray))
-    }
-}
-
-fn detail(item: &Item) -> String {
-    let mut detail = clean(&item.sublabel);
-    if !item.badges.is_empty() {
-        let badges: Vec<String> = item.badges.iter().map(|badge| clean(badge)).collect();
-        if !detail.is_empty() {
-            detail.push(' ');
-        }
-        detail.push_str(&format!("[{}]", badges.join(", ")));
-    }
-    detail
-}
-
-fn card_width(item: &Item) -> u16 {
-    let content = [
-        art::face(&item.face).width(),
-        Line::raw(clean(&item.label)).width(),
-        Line::raw(detail(item)).width(),
-    ];
-    content.into_iter().max().unwrap_or(0).max(8) as u16 + 4
-}
-
-fn render_card(frame: &mut Frame, area: Rect, item: &Item, focused: bool) {
-    let (border_type, border_style) = border(item, focused);
-    let lines = vec![
-        Line::from(art::face(&item.face)),
-        Line::raw(clean(&item.label)),
-        Line::styled(detail(item), Style::new().fg(Color::DarkGray)),
-    ];
-    let card = Paragraph::new(lines).alignment(Alignment::Center).block(
-        Block::bordered()
-            .border_type(border_type)
-            .border_style(border_style),
-    );
-    frame.render_widget(card, area);
-}
-
-fn cell_width(item: &Item) -> u16 {
-    let label = Line::raw(clean(&item.label)).width();
-    let face = art::face(&item.face).width();
-    label.max(face).max(3) as u16 + 4
-}
-
-fn render_cell(frame: &mut Frame, area: Rect, item: &Item, focused: bool) {
-    let (border_type, border_style) = border(item, focused);
-    let cell = Paragraph::new(Line::from(art::face(&item.face)))
-        .alignment(Alignment::Center)
-        .block(
-            Block::bordered()
-                .border_type(border_type)
-                .border_style(border_style)
-                .title(Span::styled(
-                    clean(&item.label),
-                    Style::new().fg(Color::DarkGray),
-                )),
-        );
-    frame.render_widget(cell, area);
-}
-
-fn stack_line(item: &Item, focused: bool) -> Line<'static> {
-    let (_, style) = border(item, focused);
-    let marker = if focused { "▸ " } else { "  " };
-    Line::from(vec![
-        Span::styled(marker, style),
-        art::face(&item.face),
-        Span::raw(" "),
-        Span::styled(clean(&item.label), style),
-        Span::styled(
-            format!("  {}", detail(item)),
-            Style::new().fg(Color::DarkGray),
-        ),
-    ])
 }
 
 fn render_prompt(frame: &mut Frame, area: Rect, prompt: &Prompt, focused_choice: Option<usize>) {
@@ -411,7 +443,7 @@ fn render_prompt(frame: &mut Frame, area: Rect, prompt: &Prompt, focused_choice:
 #[cfg(test)]
 mod tests {
     use tabletty_host::{NativePlugin, Plugin};
-    use tabletty_sdk::{InitCtx, Player};
+    use tabletty_sdk::{InitCtx, Item, Player};
     use tic_tac_toe::TicTacToe;
 
     use super::*;
@@ -498,5 +530,112 @@ mod tests {
         let view = with_fallback_prompt(view, actions);
         assert_eq!(targets(&view).len(), 1);
         assert_eq!(view.prompt.unwrap().text, "Actions");
+    }
+
+    fn draw(view: &View, width: u16, height: u16, focused: Option<Place>) -> String {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        let art = crate::art::ArtBook::default();
+        let pictures = crate::picture::Pictures::new(None);
+        let ctx = Ctx {
+            art: &art,
+            pictures: &pictures,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), view, focused, &ctx))
+            .unwrap();
+        terminal.backend().to_string()
+    }
+
+    fn zone(label: &str, layout: ZoneLayout, items: Vec<Item>) -> Zone {
+        Zone {
+            label: label.into(),
+            layout,
+            items,
+        }
+    }
+
+    /// Every semantic component the renderer draws without game art.
+    fn components() -> View {
+        use tabletty_sdk::{Face, Shape, Tone, Track};
+
+        let dice = (1..=6)
+            .map(|pips| Item::new(Face::Die(pips), format!("d{pips}")).size(Size::Medium))
+            .collect();
+        let hand = (1..=8)
+            .map(|card| {
+                let item = Item::new(Face::Up(format!("c{card}")), format!("Card {card}"));
+                Item {
+                    selectable: Some(ActionSpec::new(format!("c{card}"), "", vec![card])),
+                    ..item
+                }
+            })
+            .collect();
+        let deck = (0..5).map(|_| Item::new(Face::Down, "Deck")).collect();
+        let tokens = vec![
+            Item::new(
+                Face::Track(Track {
+                    filled: 3,
+                    total: 7,
+                }),
+                "Ann",
+            )
+            .shape(Shape::Plain)
+            .tone(Tone::Player(0)),
+            Item::new(
+                Face::Track(Track {
+                    filled: 5,
+                    total: 7,
+                }),
+                "Bob",
+            )
+            .shape(Shape::Plain)
+            .tone(Tone::Player(1)),
+        ];
+        View {
+            title: "Components".into(),
+            status: Vec::new(),
+            zones: vec![
+                zone("Dice", ZoneLayout::Row, dice),
+                zone("Hand", ZoneLayout::Hand, hand),
+                zone("Deck", ZoneLayout::Pile, deck),
+                zone("Affection", ZoneLayout::Stack, tokens),
+            ],
+            log: Vec::new(),
+            prompt: None,
+        }
+    }
+
+    #[test]
+    fn semantic_components_render() {
+        let view = components();
+        let focused = targets(&view).first().map(|target| target.place);
+        insta::assert_snapshot!(draw(&view, 70, 36, focused));
+    }
+
+    #[test]
+    fn items_shrink_when_the_screen_is_short() {
+        let view = components();
+        let roomy = draw(&view, 70, 36, None);
+        let cramped = draw(&view, 70, 22, None);
+        // Medium dice draw pips on three rows; squeezed, they fall back to ⚀–⚅.
+        assert!(roomy.contains("●   ●"), "{roomy}");
+        assert!(cramped.contains('⚅'), "{cramped}");
+    }
+
+    #[test]
+    fn only_the_top_of_a_pile_can_take_focus() {
+        let mut view = components();
+        for item in &mut view.zones[2].items {
+            item.selectable = Some(ActionSpec::new("draw", "Draw", vec![0]));
+        }
+        let pile_targets: Vec<Place> = targets(&view)
+            .into_iter()
+            .map(|target| target.place)
+            .filter(|place| matches!(place, Place::Item { zone: 2, .. }))
+            .collect();
+        assert_eq!(pile_targets, [Place::Item { zone: 2, item: 4 }]);
     }
 }

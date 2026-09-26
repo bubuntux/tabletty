@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use tabletty_host::{Plugin, Runtime, discover};
-use tabletty_tui::{App, GameEntry, SeedSource};
+use tabletty_tui::{App, GameEntry, Graphics, SeedSource};
 
 use crate::{games, paths};
 
@@ -28,6 +28,11 @@ pub struct Args {
     /// Also search this directory for games, before ./dist/games and the install dir
     #[arg(long = "games-dir", value_name = "DIR")]
     games_dirs: Vec<PathBuf>,
+
+    /// How to draw game art: detect what the terminal supports, force coloured
+    /// half-blocks, or text only
+    #[arg(long, value_enum, default_value_t = GraphicsArg::Auto)]
+    graphics: GraphicsArg,
 }
 
 pub fn main(args: Args) -> anyhow::Result<()> {
@@ -63,7 +68,11 @@ pub fn main(args: Args) -> anyhow::Result<()> {
     };
 
     let players = start.map(|index| args.players.unwrap_or(entries[index].manifest.min_players));
-    let mut app = App::new(entries, seed_source(args.seed.as_deref()));
+    let mut app = App::new(
+        entries,
+        seed_source(args.seed.as_deref()),
+        args.graphics.into(),
+    );
     if let (Some(index), Some(players)) = (start, players) {
         app.start(index, players);
     }
@@ -83,5 +92,23 @@ fn seed_source(seed: Option<&str>) -> SeedSource {
             getrandom::fill(&mut seed).expect("the OS entropy source is available");
             seed
         }),
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Default)]
+enum GraphicsArg {
+    #[default]
+    Auto,
+    Halfblocks,
+    Text,
+}
+
+impl From<GraphicsArg> for Graphics {
+    fn from(graphics: GraphicsArg) -> Self {
+        match graphics {
+            GraphicsArg::Auto => Graphics::Auto,
+            GraphicsArg::Halfblocks => Graphics::Halfblocks,
+            GraphicsArg::Text => Graphics::Text,
+        }
     }
 }

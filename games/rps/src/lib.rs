@@ -6,11 +6,35 @@
 
 use serde::{Deserialize, Serialize};
 use tabletty_sdk::{
-    ActionSpec, Effect, Face, Game, InitCtx, Item, Layout, Manifest, Outcome, Player, PlayerId,
-    PrivateMsg, Prompt, View, Zone,
+    ActionSpec, Art, Effect, Face, Game, InitCtx, Item, Layout, Manifest, Outcome, Player,
+    PlayerId, PrivateMsg, Shape, Size, Tone, View, Zone,
 };
 
 const WINS_NEEDED: u8 = 2;
+
+const ROCK_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path d="M20 70 Q10 48 28 32 Q44 16 64 24 Q86 32 88 54 Q90 76 66 82 Q40 88 20 70 Z"
+        fill="#8d8d8d" stroke="#4a4a4a" stroke-width="4"/>
+  <path d="M36 40 Q46 32 58 37" fill="none" stroke="#bdbdbd" stroke-width="5"
+        stroke-linecap="round"/>
+</svg>"##;
+
+const PAPER_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path d="M24 10 H62 L80 28 V90 H24 Z" fill="#f4f1e8" stroke="#6b6b6b" stroke-width="4"
+        stroke-linejoin="round"/>
+  <path d="M62 10 V28 H80" fill="none" stroke="#6b6b6b" stroke-width="4"
+        stroke-linejoin="round"/>
+  <path d="M34 46 H70 M34 58 H70 M34 70 H58" stroke="#9a9a9a" stroke-width="4"
+        stroke-linecap="round"/>
+</svg>"##;
+
+const SCISSORS_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path d="M38 64 L74 12" stroke="#7f8c8d" stroke-width="7" stroke-linecap="round"/>
+  <path d="M62 64 L26 12" stroke="#95a5a6" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="30" cy="76" r="12" fill="none" stroke="#c0392b" stroke-width="6"/>
+  <circle cx="70" cy="76" r="12" fill="none" stroke="#c0392b" stroke-width="6"/>
+  <circle cx="50" cy="46" r="4" fill="#2c3e50"/>
+</svg>"##;
 
 pub struct RockPaperScissors;
 
@@ -40,6 +64,23 @@ impl Throw {
             Throw::Rock => "Rock",
             Throw::Paper => "Paper",
             Throw::Scissors => "Scissors",
+        }
+    }
+
+    /// For tight spaces: one single-width character.
+    fn glyph(self) -> &'static str {
+        match self {
+            Throw::Rock => "●",
+            Throw::Paper => "▯",
+            Throw::Scissors => "✂",
+        }
+    }
+
+    fn svg(self) -> &'static str {
+        match self {
+            Throw::Rock => ROCK_SVG,
+            Throw::Paper => PAPER_SVG,
+            Throw::Scissors => SCISSORS_SVG,
         }
     }
 
@@ -196,6 +237,7 @@ impl Game for RockPaperScissors {
             status.push(("Winner".to_string(), state.name(winner).to_string()));
         }
 
+        // Your own throw shows; the other stays face down until both are in.
         let throws = (0..2)
             .map(|seat| {
                 let (face, sublabel) = match state.throws[seat] {
@@ -209,6 +251,9 @@ impl Game for RockPaperScissors {
                     sublabel: sublabel.into(),
                     ..Item::new(face, state.name(seat))
                 }
+                .shape(Shape::Card)
+                .size(Size::Medium)
+                .tone(Tone::Player(state.players[seat].id))
             })
             .collect();
         let mut zones = vec![Zone {
@@ -216,6 +261,25 @@ impl Game for RockPaperScissors {
             layout: Layout::Row,
             items: throws,
         }];
+
+        if let Some(seat) = viewer_seat.filter(|&seat| state.can_throw(seat)) {
+            let choices = Self::actions(state, state.players[seat].id)
+                .into_iter()
+                .zip(Throw::ALL)
+                .map(|(spec, throw)| Item {
+                    selectable: Some(spec),
+                    ..Item::new(Face::Up(throw.key().into()), throw.label())
+                        .shape(Shape::Icon)
+                        .size(Size::Large)
+                })
+                .collect();
+            zones.push(Zone {
+                label: "Your throw".into(),
+                layout: Layout::Row,
+                items: choices,
+            });
+        }
+
         if let Some(last_round) = state.last_round {
             zones.push(Zone {
                 label: "Last round".into(),
@@ -223,26 +287,32 @@ impl Game for RockPaperScissors {
                 items: (0..2)
                     .map(|seat| {
                         Item::new(Face::Up(last_round[seat].key().into()), state.name(seat))
+                            .shape(Shape::Card)
                     })
                     .collect(),
             });
         }
-
-        let prompt = viewer_seat
-            .filter(|&seat| state.can_throw(seat))
-            .map(|seat| Prompt {
-                text: "Your throw".into(),
-                choices: Self::actions(state, state.players[seat].id),
-                deadline_seconds: None,
-            });
 
         View {
             title: "Rock-Paper-Scissors".into(),
             status,
             zones,
             log: Vec::new(),
-            prompt,
+            prompt: None,
         }
+    }
+
+    fn art() -> Vec<Art> {
+        Throw::ALL
+            .into_iter()
+            .map(|throw| Art {
+                key: throw.key().into(),
+                label: throw.label().into(),
+                glyph: Some(throw.glyph().into()),
+                svg: Some(throw.svg().into()),
+                tone: None,
+            })
+            .collect()
     }
 }
 

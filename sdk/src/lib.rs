@@ -44,6 +44,12 @@ pub trait Game {
     /// What `viewer` may see; `None` is a spectator. This is the redaction point:
     /// never put another player's hidden information in here.
     fn view(state: &Self::State, viewer: Option<PlayerId>) -> View<Self::Action>;
+
+    /// The game's own art, referred to by key from [`Face::Up`]. Asked for once per
+    /// component, not per view. Games that draw nothing of their own can skip it.
+    fn art() -> Vec<Art> {
+        Vec::new()
+    }
 }
 
 /// Export a [`Game`] as the plugin's component interface.

@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use tabletty_sdk::{ActionSpec, InitCtx, Manifest, PlayerId, View};
+use tabletty_sdk::{ActionSpec, Art, InitCtx, Manifest, PlayerId, View};
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder, Trap};
 
@@ -185,6 +185,11 @@ impl Plugin for WasmPlugin {
         self.call(|plugin, store| plugin.call_view(store, &state.to_vec(), viewer))
             .map(Into::into)
     }
+
+    fn art(&self) -> Result<Vec<Art>, Error> {
+        let art = self.call(|plugin, store| plugin.call_art(store))?;
+        Ok(art.into_iter().map(Into::into).collect())
+    }
 }
 
 impl From<InitCtx> for wit::InitCtx {
@@ -279,6 +284,8 @@ impl From<wit::Zone> for tabletty_sdk::Zone {
                 wit::Layout::Row => Layout::Row,
                 wit::Layout::Grid(columns) => Layout::Grid(columns),
                 wit::Layout::Stack => Layout::Stack,
+                wit::Layout::Hand => Layout::Hand,
+                wit::Layout::Pile => Layout::Pile,
             },
             items: zone.items.into_iter().map(Into::into).collect(),
         }
@@ -287,17 +294,59 @@ impl From<wit::Zone> for tabletty_sdk::Zone {
 
 impl From<wit::Item> for tabletty_sdk::Item {
     fn from(item: wit::Item) -> Self {
-        use tabletty_sdk::Face;
+        use tabletty_sdk::{Face, Shape, Size, Track};
         Self {
             face: match item.face {
                 wit::Face::Up(art) => Face::Up(art),
                 wit::Face::Down => Face::Down,
                 wit::Face::Empty => Face::Empty,
+                wit::Face::Die(pips) => Face::Die(pips),
+                wit::Face::Track(track) => Face::Track(Track {
+                    filled: track.filled,
+                    total: track.total,
+                }),
             },
             label: item.label,
             sublabel: item.sublabel,
             badges: item.badges,
             selectable: item.selectable.map(Into::into),
+            shape: item.shape.map(|shape| match shape {
+                wit::Shape::Plain => Shape::Plain,
+                wit::Shape::Card => Shape::Card,
+                wit::Shape::Tile => Shape::Tile,
+                wit::Shape::Token => Shape::Token,
+                wit::Shape::Icon => Shape::Icon,
+            }),
+            size: item.size.map(|size| match size {
+                wit::Size::Small => Size::Small,
+                wit::Size::Medium => Size::Medium,
+                wit::Size::Large => Size::Large,
+            }),
+            tone: item.tone.map(Into::into),
+        }
+    }
+}
+
+impl From<wit::Tone> for tabletty_sdk::Tone {
+    fn from(tone: wit::Tone) -> Self {
+        match tone {
+            wit::Tone::Neutral => Self::Neutral,
+            wit::Tone::Accent => Self::Accent,
+            wit::Tone::Good => Self::Good,
+            wit::Tone::Bad => Self::Bad,
+            wit::Tone::Player(player) => Self::Player(player),
+        }
+    }
+}
+
+impl From<wit::Art> for tabletty_sdk::Art {
+    fn from(art: wit::Art) -> Self {
+        Self {
+            key: art.key,
+            label: art.label,
+            glyph: art.glyph,
+            svg: art.svg,
+            tone: art.tone.map(Into::into),
         }
     }
 }

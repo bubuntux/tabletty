@@ -17,7 +17,9 @@ use tabletty_host::{Error as PluginError, Plugin};
 use tabletty_sdk::{Effect, Player, PlayerId, View};
 
 use crate::GameEntry;
-use crate::art::clean;
+use crate::art::{ArtBook, clean};
+use crate::item::Ctx;
+use crate::picture::Pictures;
 use crate::view::{self, Direction, Target};
 
 pub struct Hotseat {
@@ -33,6 +35,11 @@ pub struct Hotseat {
     /// Feedback on the last key, e.g. a rejected action.
     notice: Option<String>,
     confirming_leave: bool,
+    art: ArtBook,
+    pictures: Pictures,
+    /// Set when the whole screen must be repainted, not just diffed: graphics
+    /// protocols can leave pixels behind, and a handoff must show nothing.
+    full_redraw: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +63,12 @@ pub enum HotseatAction {
 }
 
 impl Hotseat {
-    pub fn start(entry: &GameEntry, players: u8, seed: [u8; 32]) -> Result<Self, StartError> {
+    pub fn start(
+        entry: &GameEntry,
+        players: u8,
+        seed: [u8; 32],
+        pictures: Pictures,
+    ) -> Result<Self, StartError> {
         let players = (0..players)
             .map(|id| Player {
                 id,
@@ -64,6 +76,7 @@ impl Hotseat {
             })
             .collect();
         let game = Match::start(Arc::clone(&entry.plugin), players, seed, Vec::new())?;
+        let art = ArtBook::new(entry.plugin.art()?);
         let mut hotseat = Self {
             game,
             phase: Phase::Handoff,
@@ -74,6 +87,9 @@ impl Hotseat {
             events: Vec::new(),
             notice: None,
             confirming_leave: false,
+            art,
+            pictures,
+            full_redraw: true,
         };
         hotseat.pass_control(None)?;
         Ok(hotseat)
@@ -156,6 +172,7 @@ impl Hotseat {
     fn pass_control(&mut self, after: Option<PlayerId>) -> Result<(), PluginError> {
         if self.game.is_over() {
             self.phase = Phase::Over;
+            self.full_redraw = true;
             return self.refresh();
         }
         let seats: Vec<PlayerId> = self.game.players().iter().map(|player| player.id).collect();
@@ -189,6 +206,7 @@ impl Hotseat {
             Some(player) => {
                 self.viewer = player;
                 self.phase = Phase::Handoff;
+                self.full_redraw = true;
                 self.view = empty_view();
                 self.targets.clear();
                 self.focus = 0;
@@ -215,6 +233,11 @@ impl Hotseat {
             Phase::Handoff => {}
         }
         Ok(())
+    }
+
+    /// Whether the next frame must repaint everything; clears the request.
+    pub fn take_full_redraw(&mut self) -> bool {
+        std::mem::take(&mut self.full_redraw)
     }
 
     fn player_name(&self, id: PlayerId) -> String {
@@ -260,7 +283,11 @@ impl Hotseat {
             let [board, side] =
                 Layout::horizontal([Constraint::Min(0), Constraint::Length(36)]).areas(columns);
             let focused = self.targets.get(self.focus).map(|target| target.place);
-            view::render(frame, board, &self.view, focused);
+            let ctx = Ctx {
+                art: &self.art,
+                pictures: &self.pictures,
+            };
+            view::render(frame, board, &self.view, focused, &ctx);
             self.render_side(frame, side);
         }
 

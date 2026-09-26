@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use tabletty_sdk::{ActionSpec, Game, InitCtx, Manifest, PlayerId, View, raw};
+use tabletty_sdk::{ActionSpec, Art, Game, InitCtx, Manifest, PlayerId, View, raw};
 
 use crate::{Error, Plugin, Transition};
 
@@ -48,5 +48,9 @@ impl<G: Game> Plugin for NativePlugin<G> {
 
     fn view(&self, state: &[u8], viewer: Option<PlayerId>) -> Result<View, Error> {
         Ok(raw::view::<G>(state, viewer))
+    }
+
+    fn art(&self) -> Result<Vec<Art>, Error> {
+        Ok(raw::art::<G>())
     }
 }
