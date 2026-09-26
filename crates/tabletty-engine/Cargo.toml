@@ -1,0 +1,16 @@
+[package]
+name = "tabletty-engine"
+description = "The tabletty match runtime: legality, effects, and the action log"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tabletty-host.workspace = true
+tabletty-sdk.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+blake3.workspace = true
+rps.workspace = true
+tic-tac-toe.workspace = true

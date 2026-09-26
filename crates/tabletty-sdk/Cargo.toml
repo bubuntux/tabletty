@@ -1,0 +1,14 @@
+[package]
+name = "tabletty-sdk"
+description = "Write a tabletty game: implement `Game`, call `export_game!`"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Dependency-thin on purpose: this is the only crate a plugin author depends on,
+# and everything here ends up inside every plugin. No tokio, no iroh, no ratatui —
+# `tests/thin.rs` enforces it.
+[dependencies]
+postcard.workspace = true
+serde.workspace = true
+wit-bindgen.workspace = true

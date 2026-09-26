@@ -15,8 +15,9 @@ One Night Ultimate Werewolf.
 
 ## Status
 
-Early. The development environment and the design are settled; there's no code yet.
-See [docs/PLAN.md](docs/PLAN.md) for the architecture and build order.
+Early. The plugin boundary works end to end: games load as sandboxed components and play
+through a headless hotseat harness. No TUI or networking yet. See
+[docs/PLAN.md](docs/PLAN.md) for the architecture and build order.
 
 ## Building
 

@@ -7,9 +7,8 @@ each is a sandboxed WebAssembly component loaded at runtime.
 and *why* they were made, the crate layout, the build order, and the verification strategy.
 This file is only the operational summary.
 
-Status: Phase 0 done (dev environment). No Rust code exists yet. Phase 1 is
-the workspace skeleton, `wit/game.wit`, the SDK and host, the hotseat harness, and two
-throwaway games (rock-paper-scissors, tic-tac-toe) as conformance fixtures.
+Status: Phase 1 done (contract, SDK, host, engine `Match`, hotseat harness, and the
+rps / tic-tac-toe fixtures). Phase 2 is the ratatui renderer.
 
 ## Commands
 
@@ -22,10 +21,16 @@ devenv test                     # runs the tabletty:check-toolchain task
 game-build <crate>              # build a game crate -> dist/games/<crate>.wasm
 game-imports <component.wasm>   # dump a component's world; imports MUST be empty
 
-cargo nextest run
+cargo nextest run               # needs `game-build rps` and `game-build tic-tac-toe` first
 cargo clippy --all-targets
 cargo fmt
+
+cargo run -- hotseat --game rps --players 2 --seed 42   # stdin-driven; `help` lists commands
 ```
+
+The conformance, fuel and golden-transcript tests load the components from `dist/games/`.
+Rebuild them after changing a game or the SDK, or the tests run stale WASM against fresh
+native code (conformance will usually catch this and fail).
 
 ## Invariants
 

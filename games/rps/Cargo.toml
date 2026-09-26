@@ -1,0 +1,15 @@
+[package]
+name = "rps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# cdylib is the component (built by `game-build rps`); rlib lets the host's tests
+# run the same rules natively.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde.workspace = true
+tabletty-sdk.workspace = true

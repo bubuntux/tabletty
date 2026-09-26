@@ -1,0 +1,95 @@
+package tabletty:game@0.1.0;
+
+// A game plugin. Everything here is `export`; there is deliberately no `import`.
+// A component with zero imports cannot reach a clock, entropy, the filesystem or
+// the network, so determinism is a property of the module rather than a rule.
+//
+// The types live inside the world rather than in an `interface`: a world that
+// `use`s an interface imports it, and even a types-only import would show up in
+// `game-imports`.
+world game-plugin {
+  type player-id = u8;
+  type state     = list<u8>;   // opaque, plugin-owned (postcard inside)
+  type action    = list<u8>;   // opaque, plugin-owned
+
+  record manifest {
+    id:          string,       // "love-letter" — stable, used for discovery
+    name:        string,       // "Love Letter" — shown to humans
+    version:     string,
+    min-players: u8,
+    max-players: u8,
+    summary:     string,
+  }
+
+  record player { id: player-id, name: string }
+
+  record init-ctx {
+    players: list<player>,
+    seed:    list<u8>,                      // 32 bytes from commit-reveal.
+                                            // The ONLY entropy a plugin ever gets.
+    options: list<tuple<string, string>>,   // per-game settings from the lobby
+  }
+
+  record action-spec {
+    id:      string,            // stable key — for logs, tests, golden transcripts
+    label:   string,            // what the TUI shows
+    payload: action,            // submitted verbatim; host checks byte-equality
+    enabled: bool,
+    reason:  option<string>,    // why it's disabled, shown as a hint
+  }
+
+  // The only channel out of a plugin. There are no host callbacks.
+  variant effect {
+    public-log(string),
+    private-log(private-msg),
+    set-timer(timer),
+    cancel-timer(string),
+    game-over(list<outcome>),
+  }
+
+  record private-msg { to: player-id, text: string }
+  record timer       { id: string, seconds: u32 }
+  record outcome     { player: player-id, rank: u8, score: s32, note: string }
+
+  // The declarative render tree. Plugins emit this; the TUI draws it.
+  record view {
+    title:  string,
+    status: list<tuple<string, string>>,   // "Turn" -> "Alice", "Deck" -> "9"
+    zones:  list<zone>,
+    log:    list<log-line>,
+    prompt: option<prompt>,
+  }
+
+  record zone { label: string, layout: layout, items: list<item> }
+  enum layout { row, grid, stack }
+
+  record item {
+    face:       face,
+    label:      string,
+    sublabel:   string,
+    badges:     list<string>,
+    selectable: option<action-spec>,   // makes the item a click/enter target
+  }
+
+  variant face {
+    up(string),   // art key, e.g. "guard" — the renderer owns the glyphs
+    down,
+    empty,
+  }
+
+  record log-line { text: string, kind: log-kind }
+  enum log-kind { public, private, system }
+
+  record prompt {
+    text:             string,
+    choices:          list<action-spec>,
+    deadline-seconds: option<u32>,      // display only; the real clock is a timer effect
+  }
+
+  export manifest: func() -> manifest;
+  export init:     func(ctx: init-ctx) -> state;
+  export actions:  func(st: state, p: player-id) -> list<action-spec>;
+  export apply:    func(st: state, p: player-id, a: action)
+                     -> result<tuple<state, list<effect>>, string>;
+  export view:     func(st: state, p: option<player-id>) -> view;
+}

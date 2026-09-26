@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "games/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+tabletty-sdk = { path = "crates/tabletty-sdk" }
+tabletty-host = { path = "crates/tabletty-host" }
+tabletty-engine = { path = "crates/tabletty-engine" }
+rps = { path = "games/rps" }
+tic-tac-toe = { path = "games/tic-tac-toe" }
+
+# Pinned to the major of the `wasmtime` CLI in the dev shell, so the host and the
+# command-line tooling agree on the component format.
+wasmtime = "48"
+wit-bindgen = "0.62"
+
+anyhow = "1"
+blake3 = "1"
+clap = { version = "4", features = ["derive"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+insta = "1"

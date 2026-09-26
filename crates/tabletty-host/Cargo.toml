@@ -1,0 +1,17 @@
+[package]
+name = "tabletty-host"
+description = "Loads and runs sandboxed tabletty game components"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3.workspace = true
+tabletty-sdk.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+wasmtime.workspace = true
+
+[dev-dependencies]
+rps.workspace = true
+tic-tac-toe.workspace = true

@@ -53,24 +53,14 @@ zero-knowledge work:
 
 ## The WIT world is the contract
 
-`wit/game.wit`:
-
-```wit
-package tabletty:game@0.1.0;
-
-world game-plugin {
-  export manifest: func() -> manifest;
-  export init:     func(ctx: init-ctx) -> state;
-  export actions:  func(st: state, p: player-id) -> list<action-spec>;
-  export apply:    func(st: state, p: player-id, a: action)
-                     -> result<tuple<state, list<effect>>, string>;
-  export view:     func(st: state, p: option<player-id>) -> view;
-}
-```
+[`wit/game.wit`](../wit/game.wit) is the source of truth for the plugin interface: five
+exports (`manifest`, `init`, `actions`, `apply`, `view`) and the types they move.
 
 All `export`, **no `import`**. A component with zero imports cannot reach the clock,
 entropy, the filesystem, or the network — determinism becomes a property of the module
-rather than a rule authors must follow.
+rather than a rule authors must follow. The types are declared inside the world rather
+than in an `interface`, because a world that `use`s an interface imports it, and even a
+types-only import would break that.
 
 To keep it that way, build plugins for **`wasm32-unknown-unknown`** and componentise with
 `wasm-tools component new` (no WASI adapter). `wasm32-wasip2` emits components directly but
@@ -78,95 +68,7 @@ Rust std pulls in `wasi:cli/environment` and friends, which means satisfying clo
 imports or fighting instantiation. Bonus: on `wasm32-unknown-unknown`, `getrandom` won't
 link without an explicit backend, so a plugin *can't* accidentally reach for OS entropy.
 
-### The full type surface
-
-The world above is the skeleton; these are the types it moves. This is the contract to
-write into `wit/game.wit` first, because every crate is shaped by it.
-
-```wit
-interface types {
-  type player-id = u8;
-  type state     = list<u8>;   // opaque, plugin-owned (postcard inside)
-  type action    = list<u8>;   // opaque, plugin-owned
-
-  record manifest {
-    id:          string,       // "love-letter" — stable, used for discovery
-    name:        string,       // "Love Letter" — shown to humans
-    version:     string,
-    min-players: u8,
-    max-players: u8,
-    summary:     string,
-  }
-
-  record player   { id: player-id, name: string }
-
-  record init-ctx {
-    players: list<player>,
-    seed:    list<u8>,                      // 32 bytes from commit-reveal.
-                                            // The ONLY entropy a plugin ever gets.
-    options: list<tuple<string, string>>,   // per-game settings from the lobby
-  }
-
-  record action-spec {
-    id:      string,            // stable key — for logs, tests, golden transcripts
-    label:   string,            // what the TUI shows
-    payload: action,            // submitted verbatim; host checks byte-equality
-    enabled: bool,
-    reason:  option<string>,    // why it's disabled, shown as a hint
-  }
-
-  variant effect {
-    public-log(string),
-    private-log(private-msg),
-    set-timer(timer),
-    cancel-timer(string),
-    game-over(list<outcome>),
-  }
-
-  record private-msg { to: player-id, text: string }
-  record timer       { id: string, seconds: u32 }
-  record outcome     { player: player-id, rank: u8, score: s32, note: string }
-
-  // The declarative render tree. Plugins emit this; the TUI draws it.
-  // Nothing here can reach the terminal, which is what keeps plugins sandboxed
-  // and lets a non-terminal frontend be added later without touching a game.
-  record view {
-    title:  string,
-    status: list<tuple<string, string>>,   // "Turn" -> "Alice", "Deck" -> "9"
-    zones:  list<zone>,
-    log:    list<log-line>,
-    prompt: option<prompt>,
-  }
-
-  record zone { label: string, layout: layout, items: list<item> }
-  enum layout { row, grid, stack }
-
-  record item {
-    face:       face,
-    label:      string,
-    sublabel:   string,
-    badges:     list<string>,
-    selectable: option<action-spec>,   // makes the item a click/enter target
-  }
-
-  variant face {
-    up(string),   // art key, e.g. "guard" — the renderer owns the glyphs
-    down,
-    empty,
-  }
-
-  record log-line { text: string, kind: log-kind }
-  enum log-kind { public, private, system }
-
-  record prompt {
-    text:             string,
-    choices:          list<action-spec>,
-    deadline-seconds: option<u32>,      // display only; the real clock is a timer effect
-  }
-}
-```
-
-Two notes on this surface:
+Two things about the types that WIT can't say:
 
 `item.selectable` and `prompt.choices` both carry `action-spec` on purpose — the same
 action is reachable by selecting a card or by picking from an explicit list, and the
@@ -280,33 +182,16 @@ same ground. Every phase ends in something you can actually run.
 
 `devenv.nix` with the toolchain and the `game-build` / `game-imports` helpers.
 
-### Phase 1 — The contract and the boundary
+### Phase 1 — The contract and the boundary · **done**
 
-Write `wit/game.wit` from the type surface above, then `tabletty-sdk` (thick: authors
-implement a trait, never see bindings or bytes), `tabletty-host` (wasmtime, fuel, limits,
-`.cwasm` cache, discovery) and the **hotseat harness** — headless, stdin-driven, no TUI,
-no network.
+`wit/game.wit`, `tabletty-sdk` (a `Game` trait plus `export_game!`), `tabletty-host`
+(wasmtime, fuel, limits, `.cwasm` cache, discovery, and a `NativePlugin` for tests),
+a minimal `tabletty-engine` `Match`, and `tabletty hotseat` — headless, stdin-driven.
 
-Two throwaway-simple games, together maybe 150 lines, chosen to cover complementary
-halves of the contract:
-
-- **Rock-Paper-Scissors** — simultaneous hidden submission, quorum advance (`apply`
-  accepts partial submissions and only transitions when all are in), and redaction:
-  a player must not see the opponent's throw before reveal.
-- **Tic-tac-toe** — turn alternation, grid layout, `selectable` items, legal-action
-  enumeration, win/draw outcomes.
-
-Neither is interesting to play. That's the point: when something breaks here it's the
-boundary, not the rules. Both stay in the repo permanently as conformance fixtures.
-
-*Done when:* `tabletty hotseat --game rps --players 2 --seed 42` plays a full match from
-scripted stdin, and `game-imports` shows an empty import list for both components.
-
-**Then collapse this document.** Once `wit/game.wit` exists it is the source of truth for
-the contract, and *The full type surface* above becomes a prose copy of real code — two
-sources that will drift. Delete it, leave a pointer to the file, and keep only the two
-notes WIT can't express (why `item.selectable` and `prompt.choices` share a type, and why
-`face.up` carries an art key). That takes this document from ~380 lines to ~210.
+Rock-Paper-Scissors and tic-tac-toe stay in the repo permanently as conformance
+fixtures: between them they cover simultaneous hidden submission, quorum advance,
+redaction, turn alternation, grid layout, `selectable` items, disabled actions, and
+win/draw outcomes.
 
 ### Phase 2 — The renderer
 

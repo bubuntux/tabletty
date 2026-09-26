@@ -1,0 +1,56 @@
+---
+source: crates/tabletty/src/hotseat.rs
+expression: "transcript(\"rps\",\n\"\\\n# round 1: a draw\n0 rock\nview 1\n1 rock\n# round 2: P0 has already thrown, so their second throw is refused\n0 paper\n0 scissors\nview 0\n1 scissors\n# round 3\nactions 1\n1 paper\n0 scissors\n# round 4 decides it\n0 rock\n1 scissors\n\",)"
+---
+Rock-Paper-Scissors 0.1.0 — hotseat
+players: 0 P0, 1 P1
+type `help` for commands
+> 0 rock
+  P0 has thrown.
+  (to P0) You throw rock.
+> view 1
+  == Rock-Paper-Scissors ==
+  Round: 1 · Score: P0 0 – 0 P1
+  [This round]
+    P0: ## (thrown)
+    P1: . (thinking)
+  prompt: Your throw [rock, paper, scissors]
+> 1 rock
+  (to P1) You throw rock.
+  Round 1: P0 throws rock, P1 throws rock — a draw.
+> 0 paper
+  P0 has thrown.
+  (to P0) You throw paper.
+> 0 scissors
+  ! P0 has nothing to do right now
+> view 0
+  == Rock-Paper-Scissors ==
+  Round: 2 · Score: P0 0 – 0 P1
+  [This round]
+    P0: paper (thrown)
+    P1: . (thinking)
+  [Last round]
+    P0: rock
+    P1: rock
+> 1 scissors
+  (to P1) You throw scissors.
+  Round 2: P0 throws paper, P1 throws scissors — P1 takes the round.
+> actions 1
+  rock — Rock
+  paper — Paper
+  scissors — Scissors
+> 1 paper
+  P1 has thrown.
+  (to P1) You throw paper.
+> 0 scissors
+  (to P0) You throw scissors.
+  Round 3: P0 throws scissors, P1 throws paper — P0 takes the round.
+> 0 rock
+  P0 has thrown.
+  (to P0) You throw rock.
+> 1 scissors
+  (to P1) You throw scissors.
+  Round 4: P0 throws rock, P1 throws scissors — P0 takes the round.
+game over
+  1. P0 (score 2)
+  2. P1 (score 1)
