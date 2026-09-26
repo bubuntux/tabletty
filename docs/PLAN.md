@@ -2,13 +2,16 @@
 
 ## Context
 
-A terminal app for playing hidden-information board games with friends over the internet —
-Love Letter and One Night Ultimate Werewolf to begin with. Peer-to-peer, so there is no
-server to run or pay for, and games ship as plugins so new ones can be added without
-touching the core.
+A terminal app for playing hidden-information board games with friends over the internet.
+Peer-to-peer, so there is no server to run or pay for, and games ship as plugins so new
+ones can be added without touching the core.
+
+No particular game is special. The build works up from throwaway-simple ones that exist
+to prove the plugin boundary, through real games chosen for the machinery each exercises.
+See Phases.
 
 Starting from nothing. The shape of the project is set by two requirements that pull
-against each other: both games turn on information only some players may see, and a
+against each other: these games turn on information only some players may see, and a
 peer-to-peer design means there is no trusted party to hold it. Nearly every decision
 below is downstream of resolving that.
 
@@ -75,6 +78,104 @@ Rust std pulls in `wasi:cli/environment` and friends, which means satisfying clo
 imports or fighting instantiation. Bonus: on `wasm32-unknown-unknown`, `getrandom` won't
 link without an explicit backend, so a plugin *can't* accidentally reach for OS entropy.
 
+### The full type surface
+
+The world above is the skeleton; these are the types it moves. This is the contract to
+write into `wit/game.wit` first, because every crate is shaped by it.
+
+```wit
+interface types {
+  type player-id = u8;
+  type state     = list<u8>;   // opaque, plugin-owned (postcard inside)
+  type action    = list<u8>;   // opaque, plugin-owned
+
+  record manifest {
+    id:          string,       // "love-letter" — stable, used for discovery
+    name:        string,       // "Love Letter" — shown to humans
+    version:     string,
+    min-players: u8,
+    max-players: u8,
+    summary:     string,
+  }
+
+  record player   { id: player-id, name: string }
+
+  record init-ctx {
+    players: list<player>,
+    seed:    list<u8>,                      // 32 bytes from commit-reveal.
+                                            // The ONLY entropy a plugin ever gets.
+    options: list<tuple<string, string>>,   // per-game settings from the lobby
+  }
+
+  record action-spec {
+    id:      string,            // stable key — for logs, tests, golden transcripts
+    label:   string,            // what the TUI shows
+    payload: action,            // submitted verbatim; host checks byte-equality
+    enabled: bool,
+    reason:  option<string>,    // why it's disabled, shown as a hint
+  }
+
+  variant effect {
+    public-log(string),
+    private-log(private-msg),
+    set-timer(timer),
+    cancel-timer(string),
+    game-over(list<outcome>),
+  }
+
+  record private-msg { to: player-id, text: string }
+  record timer       { id: string, seconds: u32 }
+  record outcome     { player: player-id, rank: u8, score: s32, note: string }
+
+  // The declarative render tree. Plugins emit this; the TUI draws it.
+  // Nothing here can reach the terminal, which is what keeps plugins sandboxed
+  // and lets a non-terminal frontend be added later without touching a game.
+  record view {
+    title:  string,
+    status: list<tuple<string, string>>,   // "Turn" -> "Alice", "Deck" -> "9"
+    zones:  list<zone>,
+    log:    list<log-line>,
+    prompt: option<prompt>,
+  }
+
+  record zone { label: string, layout: layout, items: list<item> }
+  enum layout { row, grid, stack }
+
+  record item {
+    face:       face,
+    label:      string,
+    sublabel:   string,
+    badges:     list<string>,
+    selectable: option<action-spec>,   // makes the item a click/enter target
+  }
+
+  variant face {
+    up(string),   // art key, e.g. "guard" — the renderer owns the glyphs
+    down,
+    empty,
+  }
+
+  record log-line { text: string, kind: log-kind }
+  enum log-kind { public, private, system }
+
+  record prompt {
+    text:             string,
+    choices:          list<action-spec>,
+    deadline-seconds: option<u32>,      // display only; the real clock is a timer effect
+  }
+}
+```
+
+Two notes on this surface:
+
+`item.selectable` and `prompt.choices` both carry `action-spec` on purpose — the same
+action is reachable by selecting a card or by picking from an explicit list, and the
+TUI decides which affordance to show. They are the same value, not two encodings.
+
+`face.up` carries an art *key*, never glyphs. Keeping the renderer in charge of visuals
+is what makes every game look like one application, and it means a plugin can't smuggle
+escape sequences into the terminal.
+
 ### State and actions are opaque bytes
 
 `state` and `action` are `list<u8>`; the host never interprets them. Plugins serialise with
@@ -92,10 +193,10 @@ against one it offered — so **the host enforces legality while understanding z
 
 ### Effects are the only channel out
 
-`Effect` = `PublicLog(String)` | `PrivateLog { to, text }` | `SetTimer { id, secs }` |
-`GameOver(Vec<Result>)`. No host callbacks — that's the invariant that keeps the sandbox
-intact. Timer firings come back in as ordinary actions so they land in the log and replay
-stays deterministic.
+The `effect` variant above is the only way a plugin affects anything. No host callbacks —
+that's the invariant that keeps the sandbox intact and `apply` a pure function. Timer
+firings come back in as ordinary actions, so they land in the log and replay stays
+deterministic.
 
 ### wasmtime config that matters
 
@@ -137,8 +238,10 @@ crates/
   tabletty-tui/       ratatui View renderer + screens
   tabletty/           bin: clap, hotseat, replay, --spectate
 games/
-  love-letter/        builds to a component AND a plain lib target (see Verification)
-  onuw/
+  rps/                canaries — trivial, permanent conformance fixtures
+  tic-tac-toe/
+  liars-dice/         each builds as a component AND a native lib (see Verification)
+  .../               further games are just more directories here
 ```
 
 A single Cargo workspace: shared `[workspace.dependencies]`, members referring to each other
@@ -166,26 +269,98 @@ Signing note: iroh's QUIC connection is already authenticated to a NodeId pubkey
 per-frame signatures buy nothing point-to-point. Sign only what gets *relayed and attributed* —
 the audit log, where a peer must later prove "the host told me X."
 
-## Build order
+## Phases
 
-0. **devenv shell — done.** Next: workspace skeleton + `wit/game.wit` first draft.
-1. `tabletty-host` + `tabletty-sdk` + **hotseat harness** (headless, stdin-driven, file-watch hot
-   reload). Build **Love Letter** against it. Validates the ABI before any networking exists,
-   and stays the fastest way to develop a game forever. State is bytes, so a reload can often
-   keep a match running.
-2. `tabletty-tui` renders `View` in hotseat. Playable on one machine.
-3. **ONUW rules in hotseat.** The API stress test: timers, sequential night wakes where nobody
-   knows who's acting, simultaneous voting (`apply` accepts partial submissions and only
-   transitions on quorum), Doppelgänger acting twice. Expect `View` and `Effect` to grow here.
-4. `tabletty-net` + engine split: iroh star, tickets, seats, `--spectate`, commit-reveal seed,
-   component transfer. Now it's multiplayer.
-5. Deferred: replay-audit UI, reconnect-on-drop, host failover via per-turn signed snapshots,
-   text chat, mouse selection.
+Each phase is defined by the **capability** it proves, not by the game that proves it.
+The games below are vehicles, chosen because each one exercises the next piece of
+machinery with the least rules code; swap any of them for something else that covers the
+same ground. Every phase ends in something you can actually run.
 
-**Sequencing judgment call:** ONUW lands at step 3, before the net layer, because `View` and
-`Effect` *are* the wire format — letting ONUW reshape them first means the protocol is
-designed against final types. Cheap to reorder while there are no deployed peers; if you'd
-rather see it working over the network sooner, swap 3 and 4 and accept a protocol rev.
+### Phase 0 — Dev environment · **done**
+
+`devenv.nix` with the toolchain and the `game-build` / `game-imports` helpers.
+
+### Phase 1 — The contract and the boundary
+
+Write `wit/game.wit` from the type surface above, then `tabletty-sdk` (thick: authors
+implement a trait, never see bindings or bytes), `tabletty-host` (wasmtime, fuel, limits,
+`.cwasm` cache, discovery) and the **hotseat harness** — headless, stdin-driven, no TUI,
+no network.
+
+Two throwaway-simple games, together maybe 150 lines, chosen to cover complementary
+halves of the contract:
+
+- **Rock-Paper-Scissors** — simultaneous hidden submission, quorum advance (`apply`
+  accepts partial submissions and only transitions when all are in), and redaction:
+  a player must not see the opponent's throw before reveal.
+- **Tic-tac-toe** — turn alternation, grid layout, `selectable` items, legal-action
+  enumeration, win/draw outcomes.
+
+Neither is interesting to play. That's the point: when something breaks here it's the
+boundary, not the rules. Both stay in the repo permanently as conformance fixtures.
+
+*Done when:* `tabletty hotseat --game rps --players 2 --seed 42` plays a full match from
+scripted stdin, and `game-imports` shows an empty import list for both components.
+
+**Then collapse this document.** Once `wit/game.wit` exists it is the source of truth for
+the contract, and *The full type surface* above becomes a prose copy of real code — two
+sources that will drift. Delete it, leave a pointer to the file, and keep only the two
+notes WIT can't express (why `item.selectable` and `prompt.choices` share a type, and why
+`face.up` carries an art key). That takes this document from ~380 lines to ~210.
+
+### Phase 2 — The renderer
+
+`tabletty-tui`: the `view` tree rendered with ratatui, screens for menu and match, the
+event loop (`tokio::select!` over input / timers, network later).
+
+*Done when:* both canaries are playable on one machine with a real interface.
+
+### Phase 3 — First real game
+
+**Liar's Dice.** Simple rules, but it lands the machinery nothing so far has touched:
+seeded RNG for the roll (all entropy from `init-ctx.seed`, so the same seed replays
+identically), genuinely private per-player state, an escalating and enumerable action
+space, challenge resolution, and player elimination.
+
+*Done when:* a full multi-round game is playable in hotseat, and the redaction property
+test passes — no serialised `view` for player A ever contains player B's dice.
+
+### Phase 4 — Second real game
+
+A game with **targeting and a real deck** — one player acting on another, card draw and
+discard, per-card effects. Love Letter fits, so does Go Fish if you want less rules code.
+
+The purpose is type stability: `view`, `effect` and `action-spec` are the wire format, so
+they should stop changing before a protocol is built on them. Two real games plus two
+canaries is enough signal that they've settled.
+
+*Done when:* nothing in `wit/game.wit` has changed to accommodate this game that wasn't
+already there for the last one.
+
+### Phase 5 — Networking
+
+`tabletty-net`: iroh endpoint, tickets as lobby codes, seats, the host/peer split,
+`--spectate`, commit-reveal seed, and component transfer over `iroh-blobs` with the
+hash-accept prompt.
+
+*Done when:* three terminals on different machines — one `tabletty host --spectate`, two
+joining by ticket, one of them without the component installed — play a game end to end.
+
+### Phase 6 — The stress test
+
+A game that pushes the API past where it's comfortable: **One Night Ultimate Werewolf**
+is the obvious candidate — timed phases, sequential night wakes where nobody knows who is
+acting, simultaneous voting, and a role that acts twice. It also only makes sense over
+the network, which is why it lands after Phase 5 rather than before.
+
+Expect to extend `effect` and `view` here. If Phase 4 did its job, expect to extend them
+*only a little*.
+
+### Phase 7 — Hardening
+
+Replay-audit UI, reconnect-on-drop (cheap — NodeId is stable, so it's seat lookup plus a
+view resend), host failover via per-turn signed snapshots, text chat, mouse selection.
+
 
 ## Verification
 
@@ -193,9 +368,9 @@ Games set `crate-type = ["cdylib", "rlib"]` so each builds as **both** a compone
 native lib. That dual target is what makes the rest of this testable:
 
 - **Native rule tests** — table-driven on `apply`, fast and debuggable, no WASM in the loop.
-- **Invariant props** (`proptest`, native): card conservation (Love Letter's 16 cards always
-  accounted for); legal-action closure; no state reachable where `actions()` is empty but the
-  game isn't over.
+- **Invariant props** (`proptest`, native): component conservation (every card or die
+  accounted for in every reachable state); legal-action closure; no state where `actions()`
+  is empty but the game has not ended.
 - **Redaction prop** — for every state in a fuzz run, assert `view(st, p)` contains no bytes
   of another player's hidden cards. The one security-critical test; runs natively, so it's
   cheap enough for every commit.
@@ -203,7 +378,7 @@ native lib. That dual target is what makes the rest of this testable:
   assert identical state hashes and effect sequences. Native tests catch rule bugs; this
   catches ABI bugs.
 - **Fuel determinism** — same match twice, assert identical fuel consumed.
-- **Golden transcripts** — `tabletty hotseat --game love-letter --players 3 --seed 42` against
+- **Golden transcripts** — `tabletty hotseat --game rps --players 2 --seed 42` against
   scripted stdin, snapshotted with `insta`.
 - **Replay** — `tabletty replay match.log` re-derives a byte-identical final state.
 - **Manual end-to-end** — three terminals: one `tabletty host --spectate`, two joining by
