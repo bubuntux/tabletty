@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The toolchain comes from devenv.nix/devenv.lock, exactly as it does locally,
+      # so CI can't drift from the dev shell.
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+      - run: nix profile install nixpkgs#devenv
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Toolchain check
+        run: devenv test
+      - name: Build games, fmt, clippy, tests
+        run: devenv shell -- ci

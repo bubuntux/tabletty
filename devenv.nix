@@ -55,6 +55,24 @@
     wasm-tools component wit "''${1:?usage: game-imports <component.wasm>}"
   '';
 
+  # Everything CI checks, runnable locally with `devenv shell -- ci`. Components
+  # are built first because the conformance and golden-transcript tests load them
+  # from dist/games. Assumes each games/<dir> holds a crate named <dir>.
+  scripts.ci.exec = ''
+    set -euo pipefail
+    for dir in games/*/; do
+      crate="$(basename "$dir")"
+      game-build "$crate"
+      if wasm-tools component wit "dist/games/$crate.wasm" | grep -E '^\s*import'; then
+        echo "error: $crate imports something; plugins must import nothing" >&2
+        exit 1
+      fi
+    done
+    cargo fmt --check
+    cargo clippy --all-targets --locked -- -D warnings
+    cargo nextest run --locked
+  '';
+
   enterShell = ''
     echo "tabletty devenv ready:"
     echo "  $(rustc --version)"

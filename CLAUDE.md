@@ -17,6 +17,7 @@ Everything runs inside the dev shell:
 ```
 devenv shell                    # enter the environment
 devenv test                     # runs the tabletty:check-toolchain task
+devenv shell -- ci              # everything CI runs: build games, import check, fmt, clippy, tests
 
 game-build <crate>              # build a game crate -> dist/games/<crate>.wasm
 game-imports <component.wasm>   # dump a component's world; imports MUST be empty
