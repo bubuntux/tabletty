@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
+// The plugin contract is permissively licensed, like tabletty-sdk, so anyone can
+// implement it. The rest of tabletty is GPL-3.0-or-later.
+
 package tabletty:game@0.1.0;
 
 // The types live inside the world rather than in an `interface`: a world that

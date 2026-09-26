@@ -27,3 +27,12 @@ Requires [devenv](https://devenv.sh):
 devenv shell
 cargo build
 ```
+
+## License
+
+tabletty is licensed under the [GNU General Public License v3.0 or later](LICENSE).
+
+The plugin contract ([`wit/game.wit`](wit/game.wit)) and the SDK
+([`crates/tabletty-sdk`](crates/tabletty-sdk)) are instead dual-licensed under
+[MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. The SDK is compiled
+into every game plugin, so you can license your own games however you like.

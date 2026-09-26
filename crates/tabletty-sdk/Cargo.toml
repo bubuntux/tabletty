@@ -3,7 +3,9 @@ name = "tabletty-sdk"
 description = "Write a tabletty game: implement `Game`, call `export_game!`"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+# The SDK is compiled into every game plugin, so it stays permissive: plugin
+# authors can license their games however they like. The rest of tabletty is GPL.
+license = "MIT OR Apache-2.0"
 
 # Dependency-thin on purpose: this is the only crate a plugin author depends on,
 # and everything here ends up inside every plugin. No tokio, no iroh, no ratatui —
