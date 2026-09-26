@@ -1,41 +1,21 @@
-//! The types a game moves across the boundary, mirroring `wit/game.wit`.
+//! The types a game moves across the boundary.
 //!
-//! Anything that carries an action is generic over it. A game works with its own
-//! typed `Action`; the default, [`Payload`], is the encoded form the host sees.
+//! Most are generated from `wit/game.wit` and re-exported as-is. The five that carry
+//! an action — [`ActionSpec`], [`View`], [`Zone`], [`Item`], [`Prompt`] — are written
+//! out here so they can be generic over it: a game works with its own typed `Action`,
+//! and the default, [`Payload`], is the encoded form the host sees. `guest.rs`
+//! converts them to the generated wire types, so a WIT change that isn't mirrored
+//! here fails to compile.
 
 use serde::{Deserialize, Serialize};
 
-pub type PlayerId = u8;
+pub use crate::guest::bindings::{
+    Effect, Face, InitCtx, Layout, LogKind, LogLine, Manifest, Outcome, Player, PlayerId,
+    PrivateMsg, Timer,
+};
 
 /// An encoded action: what actually crosses the boundary.
 pub type Payload = Vec<u8>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Manifest {
-    /// Stable identifier used for discovery, e.g. `"love-letter"`.
-    pub id: String,
-    /// Shown to humans, e.g. `"Love Letter"`.
-    pub name: String,
-    pub version: String,
-    pub min_players: u8,
-    pub max_players: u8,
-    pub summary: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Player {
-    pub id: PlayerId,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InitCtx {
-    pub players: Vec<Player>,
-    /// 32 bytes from commit–reveal. The only entropy a game ever gets.
-    pub seed: Vec<u8>,
-    /// Per-game settings from the lobby.
-    pub options: Vec<(String, String)>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionSpec<A = Payload> {
@@ -78,36 +58,6 @@ impl<A> ActionSpec<A> {
             reason: self.reason,
         }
     }
-}
-
-/// The only way a game affects anything outside its own state.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Effect {
-    PublicLog(String),
-    PrivateLog(PrivateMsg),
-    SetTimer(Timer),
-    CancelTimer(String),
-    GameOver(Vec<Outcome>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PrivateMsg {
-    pub to: PlayerId,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Timer {
-    pub id: String,
-    pub seconds: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Outcome {
-    pub player: PlayerId,
-    pub rank: u8,
-    pub score: i32,
-    pub note: String,
 }
 
 /// The declarative render tree. Games emit it; the TUI draws it.
@@ -158,13 +108,6 @@ impl<A> Zone<A> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Layout {
-    Row,
-    Grid,
-    Stack,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Item<A = Payload> {
     pub face: Face,
@@ -196,27 +139,6 @@ impl<A> Item<A> {
             selectable: self.selectable.map(|spec| spec.map_payload(f)),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Face {
-    /// An art key, e.g. `"guard"`. The renderer owns the glyphs.
-    Up(String),
-    Down,
-    Empty,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LogLine {
-    pub text: String,
-    pub kind: LogKind,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LogKind {
-    Public,
-    Private,
-    System,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
